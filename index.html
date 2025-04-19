@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Speech to Braille</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2196F3">
+    <link rel="apple-touch-icon" href="images/icon-192x192.png">
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <h1>Speech to Braille</h1>
+        </header>
+
+        <main>
+            <!-- Language Selector -->
+            <div class="language-selector">
+                <button id="lang-en" class="language-btn active" onclick="switchLanguage('en')">English</button>
+                <button id="lang-fil" class="language-btn" onclick="switchLanguage('fil')">Filipino</button>
+            </div>
+
+            <!-- Introduction Phase -->
+            <section id="intro-phase" class="phase active">
+                <h2>Welcome to Speech to Braille</h2>
+                <p>This app converts your speech into braille patterns.</p>
+                <div class="countdown">
+                    <span id="intro-countdown">12</span> seconds remaining
+                </div>
+            </section>
+
+            <!-- Recording Phase -->
+            <section id="recording-phase" class="phase">
+                <h2>Recording</h2>
+                <p>Please speak now...</p>
+                <div class="visualization">
+                    <div class="wave" id="audio-wave"></div>
+                </div>
+                <div class="recognized-text" id="recognized-text">
+                    <p>Recognized speech will appear here...</p>
+                </div>
+            </section>
+
+            <!-- Output Phase -->
+            <section id="output-phase" class="phase">
+                <h2>Braille Output</h2>
+                <div class="braille-output" id="braille-output"></div>
+                <div class="countdown">
+                    <span id="output-countdown">8</span> seconds remaining
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <div class="status-container">
+                <div id="ble-status" class="status">BLE: Disconnected</div>
+                <div id="phase-status" class="status">Phase: Introduction</div>
+            </div>
+        </footer>
+    </div>
+
+    <script src="braille-database.js"></script>
+    <script src="script.js"></script>
+    <script>
+        // Register service worker for PWA functionality
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('service-worker.js')
+                    .then(reg => console.log('Service worker registered:', reg))
+                    .catch(err => console.log('Service worker registration failed:', err));
+            });
+        }
+    </script>
+</body>
+</html>
