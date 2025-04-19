@@ -1,12 +1,16 @@
-Created by kiloJoules³
-Apolonio - Model Design Lead
-Ignacio - Research Lead
-Manguni - Software Lead
-Mission - Hardware Lead
+## *Created by kiloJoules³*
 
-> "Kahit 2.00 lang po, liligaya na po kami." - kJ³ Team
+Apolonio, *Model Design Lead*
 
-# Speech to Braille Progressive Web App
+Ignacio, *Research Lead*
+
+Manguni, *Software Lead*
+
+Mission, *Hardware Lead*
+
+> ### "Kahit 2.00 lang po, liligaya na po kami." - kJ³ Team
+
+# Speech-to-Braille Refreshable Display - Mobile Web App
 
    - **Introduction Phase** (12 seconds):
      - Application starts with a welcome message
@@ -81,7 +85,7 @@ Data is sent in the format: `O:[1,2,3]` or `O:[[1,2],[3,4]]` where:
 ## System Architecture
 
 ```mermaid
-graph LR
+graph TD
     subgraph "Web Application"
         A[Speech Recognition] --> B[Text-to-Braille Converter]
         B --> C[BLE Communication]
@@ -92,5 +96,5 @@ graph LR
         E --> F[Physical Braille Display]
     end
     
-    C -- "BLE Connection<br>Service: 19b10000-e8f2-537e-4f6c-d104768a1214<br>Char: 19b10001-e8f2-537e-4f6c-d104768a1214" --> D
+    C -- "BLE Connection" --> D
 ```
