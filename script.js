@@ -14,6 +14,15 @@ const audioWave = document.getElementById('audio-wave');
 const bleStatus = document.getElementById('ble-status');
 const phaseStatus = document.getElementById('phase-status');
 
+// Added microphone level visualization and automatic braille output for recognized words in the database
+const micLevel = document.createElement('div');
+micLevel.id = 'mic-level';
+micLevel.style.height = '10px';
+micLevel.style.backgroundColor = 'green';
+micLevel.style.marginTop = '10px';
+micLevel.style.transition = 'width 0.1s';
+document.querySelector('.visualization').appendChild(micLevel);
+
 // BLE Variables
 let bleDevice = null;
 let bleServer = null;
@@ -73,6 +82,13 @@ function setupSpeechRecognition() {
             for (let i = event.resultIndex; i < event.results.length; i++) {
                 if (event.results[i].isFinal) {
                     currentTranscript += event.results[i][0].transcript + ' ';
+                    const matches = brailleDB.searchWords(event.results[i][0].transcript);
+                    if (matches.length > 0) {
+                        displayBrailleOutput(matches);
+                        setTimeout(() => {
+                            brailleOutput.innerHTML = ''; // Clear braille output after 8 seconds
+                        }, 8000);
+                    }
                 } else {
                     interim += event.results[i][0].transcript;
                 }
@@ -517,8 +533,13 @@ function animateAudioWave(event) {
             const confidence = result[0].confidence || 0.5;
             const volume = Math.min(0.8, Math.max(0.1, confidence));
             audioWave.style.transform = `scaleY(${volume})`;
+            updateMicLevel(volume);
         }
     }
+}
+
+function updateMicLevel(volume) {
+    micLevel.style.width = `${volume * 100}%`;
 }
 
 /**
