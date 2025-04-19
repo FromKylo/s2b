@@ -1,6 +1,6 @@
 const CACHE_NAME = 'speech-to-braille-v1';
 
-// Ensure all resources exist before caching
+// Only include resources that actually exist
 const urlsToCache = [
     '/',
     '/index.html',
@@ -8,9 +8,8 @@ const urlsToCache = [
     '/script.js',
     '/braille-database.js',
     '/braille-database.csv',
-    '/manifest.json',
-    '/images/icon-192x192.png',
-    '/images/icon-512x512.png'
+    '/manifest.json'
+    // Removed missing icon files
 ];
 
 // Install event - cache resources
@@ -20,6 +19,11 @@ self.addEventListener('install', event => {
             .then(cache => {
                 console.log('Opened cache');
                 return cache.addAll(urlsToCache);
+            })
+            .catch(error => {
+                console.error('Cache installation failed:', error);
+                // Continue with installation even if caching fails
+                return Promise.resolve();
             })
     );
 });

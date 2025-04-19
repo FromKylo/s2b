@@ -325,6 +325,15 @@ class SpeedTestCharacteristicCallbacks: public BLECharacteristicCallbacks {
       Serial.print(" bytes, Total: ");
       Serial.print(totalBytesReceived);
       Serial.println(" bytes");
+      
+      // Provide instant feedback if we're getting close to completion
+      if (packetCount % 10 == 0) {
+        unsigned long currentDuration = millis() - testStartTime;
+        float currentSpeed = (totalBytesReceived * 1000.0) / currentDuration;
+        Serial.print("Current speed: ");
+        Serial.print(currentSpeed);
+        Serial.println(" bytes/second");
+      }
     }
   }
 };
