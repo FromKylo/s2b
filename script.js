@@ -51,16 +51,10 @@ async function initApp() {
     // Load braille database
     await brailleDB.loadDatabase();
     
-    // Setup audio visualization
+    // Setups
     setupAudioVisualization();
-    
-    // Setup Web Speech API if available
     setupSpeechRecognition();
-    
-    // Setup text-to-speech
     setupTextToSpeech();
-    
-    // Start the introduction phase
     startIntroductionPhase();
 }
 
