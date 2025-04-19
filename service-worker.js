@@ -30,6 +30,11 @@ self.addEventListener('install', event => {
 
 // Fetch event - serve from cache when possible
 self.addEventListener('fetch', event => {
+    // Skip chrome-extension URLs which can't be cached
+    if (event.request.url.startsWith('chrome-extension://')) {
+        return;
+    }
+
     event.respondWith(
         caches.match(event.request)
             .then(response => {
@@ -51,10 +56,16 @@ self.addEventListener('fetch', event => {
                         // Clone the response
                         const responseToCache = response.clone();
                         
-                        caches.open(CACHE_NAME)
-                            .then(cache => {
-                                cache.put(event.request, responseToCache);
-                            });
+                        // Don't try to cache chrome-extension URLs
+                        if (!event.request.url.startsWith('chrome-extension://')) {
+                            caches.open(CACHE_NAME)
+                                .then(cache => {
+                                    cache.put(event.request, responseToCache);
+                                })
+                                .catch(err => {
+                                    console.error('Error caching response:', err);
+                                });
+                        }
                             
                         return response;
                     })
