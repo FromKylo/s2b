@@ -72,6 +72,31 @@ void lowerAllDots() {
  * Can handle both single arrays [1,3,4] and nested arrays [[1,2],[3,4]]
  */
 void processArrayString(std::string arrayString) {
+  // Check for speed test packets from main characteristic (fallback mode)
+  if (arrayString.length() > 2 && arrayString.substr(0, 2) == "S:") {
+    // This is a speed test packet using the main characteristic as fallback
+    // Just log it and update speed test variables
+    String dataStr = arrayString.substr(2).c_str();
+    Serial.print("Received speed test data (fallback mode): ");
+    Serial.println(dataStr);
+    
+    // Update speed test variables
+    if (!speedTestActive) {
+      speedTestActive = true;
+      testStartTime = millis();
+      packetCount = 0;
+      totalBytesReceived = 0;
+    }
+    
+    packetCount++;
+    totalBytesReceived += arrayString.length();
+    lastPacketTime = millis();
+    
+    // Don't process as braille data
+    return;
+  }
+  
+  // Process normal braille data
   // Check for empty array
   if (arrayString == "[]") {
     lowerAllDots();
