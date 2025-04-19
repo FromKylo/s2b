@@ -1,0 +1,220 @@
+:root {
+    --primary-color: #2196F3;
+    --secondary-color: #0d47a1;
+    --text-color: #333;
+    --light-gray: #f5f5f5;
+    --border-radius: 8px;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: 1.6;
+    color: var(--text-color);
+    background-color: var(--light-gray);
+}
+
+.app-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+header {
+    padding: 20px 0;
+    text-align: center;
+    color: var(--secondary-color);
+}
+
+main {
+    flex: 1;
+    background: white;
+    border-radius: var(--border-radius);
+    padding: 20px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.phase {
+    display: none;
+    padding: 20px;
+}
+
+.phase.active {
+    display: block;
+    animation: fadeIn 0.5s;
+}
+
+.countdown {
+    margin-top: 20px;
+    font-size: 18px;
+    text-align: center;
+    color: var(--secondary-color);
+    font-weight: bold;
+}
+
+.visualization {
+    margin: 20px 0;
+    height: 100px;
+    background: var(--light-gray);
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    position: relative;
+}
+
+.wave {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 100%;
+    background: linear-gradient(to top, var(--primary-color) 0%, transparent 100%);
+    opacity: 0.7;
+    transform: scaleY(0.1);
+    transform-origin: bottom;
+    transition: transform 0.1s ease;
+}
+
+.recognized-text {
+    margin-top: 20px;
+    min-height: 100px;
+    padding: 15px;
+    background: var(--light-gray);
+    border-radius: var(--border-radius);
+    font-size: 18px;
+}
+
+.braille-output {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    justify-content: center;
+    padding: 20px;
+}
+
+.braille-cell {
+    display: grid;
+    grid-template-columns: repeat(2, 20px);
+    grid-template-rows: repeat(3, 20px);
+    gap: 5px;
+    margin-right: 10px;
+}
+
+.braille-dot {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background-color: var(--light-gray);
+    border: 1px solid #ccc;
+}
+
+.braille-dot.active {
+    background-color: var(--primary-color);
+    border-color: var(--secondary-color);
+}
+
+.braille-word {
+    text-align: center;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: var(--light-gray);
+    border-radius: var(--border-radius);
+    position: relative;
+}
+
+.braille-pattern {
+    margin-bottom: 10px;
+}
+
+.word-text {
+    font-weight: bold;
+    font-size: 22px;
+    color: var(--secondary-color);
+}
+
+footer {
+    margin-top: 20px;
+    padding: 10px 0;
+}
+
+.status-container {
+    display: flex;
+    justify-content: space-between;
+}
+
+.status {
+    padding: 8px 15px;
+    background-color: #eee;
+    border-radius: 20px;
+    font-size: 14px;
+}
+
+#ble-status.connected {
+    background-color: #4CAF50;
+    color: white;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+
+@media (max-width: 600px) {
+    .app-container {
+        padding: 10px;
+    }
+    
+    main {
+        padding: 10px;
+    }
+}
+
+/* Language selector */
+.language-selector {
+    display: flex;
+    justify-content: center;
+    margin: 15px 0;
+    gap: 10px;
+}
+
+.language-btn {
+    padding: 8px 16px;
+    background-color: #eee;
+    border: none;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.language-btn.active {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+#offline-status.ready {
+    background-color: #4CAF50; /* Green for ready */
+    color: white;
+}
+
+#offline-status.loading {
+    background-color: #ffeb3b; /* Yellow for loading */
+    color: #333;
+}
+
+#offline-status.error {
+    background-color: #f44336; /* Red for error/unavailable */
+    color: white;
+}
