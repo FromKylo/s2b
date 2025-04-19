@@ -15,11 +15,18 @@
             <h1>Speech to Braille</h1>
         </header>
 
-        <!-- Connect Display button moved to the top -->
-        <div class="button-container" style="text-align: center; margin: 20px 0;">
-            <button class="ble-button" style="padding: 10px 20px; background-color: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 10px; margin: 0 auto;">
+        <!-- Connect Display and Test buttons at the top -->
+        <div class="button-container" style="text-align: center; margin: 20px 0; display: flex; justify-content: center; gap: 15px;">
+            <button class="ble-button" style="padding: 10px 20px; background-color: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 10px;">
                 <img src="images/bluetooth-logo.png" alt="Bluetooth Logo" style="width: 20px; height: 20px;">
                 Connect Display
+            </button>
+            
+            <button id="braille-test-button" style="padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 10px;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 3V21M4 12H20" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                Test Braille Display
             </button>
         </div>
 

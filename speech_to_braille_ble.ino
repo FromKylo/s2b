@@ -13,6 +13,16 @@
 // BLE service and characteristic UUIDs (must match web app)
 #define BRAILLE_SERVICE_UUID        "19b10000-e8f2-537e-4f6c-d104768a1214"
 #define BRAILLE_CHARACTERISTIC_UUID "19b10001-e8f2-537e-4f6c-d104768a1214"
+// BLE troubleshooting speed test - added measurement UUID
+#define SPEED_TEST_CHARACTERISTIC_UUID "19b10002-e8f2-537e-4f6c-d104768a1214"
+
+// BLE speed test variables
+unsigned long testStartTime = 0;
+unsigned long lastPacketTime = 0;
+unsigned long packetCount = 0;
+unsigned long totalBytesReceived = 0;
+bool speedTestActive = false;
+const unsigned long SPEED_TEST_TIMEOUT = 5000; // 5 seconds timeout
 
 const int braillePins[3][6] = {
   {13, 12, 11, 10, 9, 8}, // Braille Cell 1
@@ -41,6 +51,7 @@ bool outputActive = false;
 // BLE objects
 BLEServer* pServer = NULL;
 BLECharacteristic* pCharacteristic = NULL;
+BLECharacteristic* pSpeedTestCharacteristic = NULL; // Speed test characteristic
 bool deviceConnected = false;
 bool oldDeviceConnected = false;
 uint8_t currentBrailleState = 0;
@@ -260,6 +271,39 @@ class CharacteristicCallbacks: public BLECharacteristicCallbacks {
   }
 };
 
+// Custom callback for BLE speed test characteristic operations
+class SpeedTestCharacteristicCallbacks: public BLECharacteristicCallbacks {
+  void onWrite(BLECharacteristic* pCharacteristic) {
+    std::string value = pCharacteristic->getValue();
+    
+    if (value.length() > 0) {
+      if (!speedTestActive) {
+        // Start speed test
+        speedTestActive = true;
+        testStartTime = millis();
+        lastPacketTime = testStartTime;
+        packetCount = 0;
+        totalBytesReceived = 0;
+        Serial.println("Speed test started");
+      }
+      
+      // Update speed test variables
+      packetCount++;
+      totalBytesReceived += value.length();
+      lastPacketTime = millis();
+      
+      // Print speed test progress
+      Serial.print("Packet ");
+      Serial.print(packetCount);
+      Serial.print(" received: ");
+      Serial.print(value.length());
+      Serial.print(" bytes, Total: ");
+      Serial.print(totalBytesReceived);
+      Serial.println(" bytes");
+    }
+  }
+};
+
 /**
  * Activate braille dots based on array inputs
  */
@@ -373,6 +417,15 @@ void setup() {
   // Add client characteristic descriptor
   pCharacteristic->addDescriptor(new BLE2902());
 
+  // Create BLE speed test characteristic
+  pSpeedTestCharacteristic = pService->createCharacteristic(
+    SPEED_TEST_CHARACTERISTIC_UUID,
+    BLECharacteristic::PROPERTY_WRITE
+  );
+  
+  // Set callbacks for speed test characteristic
+  pSpeedTestCharacteristic->setCallbacks(new SpeedTestCharacteristicCallbacks());
+
   // Start the service
   pService->start();
 
@@ -445,6 +498,20 @@ void loop() {
     Serial.println("ms - lowering all dots");
     outputActive = false;
     lowerAllDots();
+  }
+  
+  // Speed test timeout handling
+  if (speedTestActive && (millis() - lastPacketTime >= SPEED_TEST_TIMEOUT)) {
+    unsigned long testDuration = millis() - testStartTime;
+    float speed = (totalBytesReceived * 1000.0) / testDuration; // bytes per second
+    Serial.print("Speed test completed: ");
+    Serial.print(totalBytesReceived);
+    Serial.print(" bytes in ");
+    Serial.print(testDuration);
+    Serial.print(" ms, Speed: ");
+    Serial.print(speed);
+    Serial.println(" bytes/second");
+    speedTestActive = false;
   }
   
   // Brief delay in the loop
