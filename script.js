@@ -14,15 +14,6 @@ const audioWave = document.getElementById('audio-wave');
 const bleStatus = document.getElementById('ble-status');
 const phaseStatus = document.getElementById('phase-status');
 
-// Added microphone level visualization and automatic braille output for recognized words in the database
-const micLevel = document.createElement('div');
-micLevel.id = 'mic-level';
-micLevel.style.height = '10px';
-micLevel.style.backgroundColor = 'green';
-micLevel.style.marginTop = '10px';
-micLevel.style.transition = 'width 0.1s';
-document.querySelector('.visualization').appendChild(micLevel);
-
 // BLE Variables
 let bleDevice = null;
 let bleServer = null;
@@ -50,6 +41,9 @@ let isConnectedToBLE = false;
 async function initApp() {
     // Load braille database
     await brailleDB.loadDatabase();
+    
+    // Setup audio visualization
+    setupAudioVisualization();
     
     // Setup Web Speech API if available
     setupSpeechRecognition();
@@ -81,14 +75,39 @@ function setupSpeechRecognition() {
             let interim = '';
             for (let i = event.resultIndex; i < event.results.length; i++) {
                 if (event.results[i].isFinal) {
-                    const recognizedWord = event.results[i][0].transcript.trim();
-                    currentTranscript += recognizedWord + ' ';
-                    const matches = brailleDB.searchWords(recognizedWord);
-                    if (matches.length > 0) {
-                        displayBrailleOutput(matches);
-                        setTimeout(() => {
-                            brailleOutput.innerHTML = ''; // Clear braille output after 8 seconds
-                        }, 8000);
+                    // Get the complete recognized text
+                    const recognizedText = event.results[i][0].transcript.trim();
+                    // Add to transcript
+                    currentTranscript += recognizedText + ' ';
+                    
+                    // Split into individual words for matching
+                    const words = recognizedText.toLowerCase().split(/\s+/);
+                    
+                    // Only process the last word in the phrase
+                    if (words.length > 0) {
+                        const lastWord = words[words.length - 1];
+                        if (lastWord) {
+                            // Try to find a match for this specific word
+                            const match = brailleDB.findWord(lastWord);
+                            if (match) {
+                                console.log(`Found match for last word: ${lastWord}`, match);
+                                // Display this specific match
+                                displayBrailleOutput([match]);
+                                
+                                // Send to BLE if connected
+                                if (isConnectedToBLE) {
+                                    sendBrailleToBLE(match);
+                                }
+                                
+                                // Clear after 8 seconds
+                                setTimeout(() => {
+                                    brailleOutput.innerHTML = '';
+                                }, 8000);
+                            } else {
+                                // Play no-match audio cue
+                                playAudioCue('no-match');
+                            }
+                        }
                     }
                 } else {
                     interim += event.results[i][0].transcript;
@@ -523,6 +542,28 @@ function playAudioCue(type) {
         setTimeout(() => {
             oscillator.stop();
         }, 300);
+    } else if (type === 'no-match') {
+        oscillator.type = 'sawtooth';
+        oscillator.frequency.value = 330; // E4 note
+        gainNode.gain.value = 0.1;
+        
+        oscillator.start();
+        setTimeout(() => {
+            oscillator.stop();
+        }, 200);
+        
+        // Play a second tone after a short delay for a distinctive "no match" sound
+        setTimeout(() => {
+            const secondOscillator = audioContext.createOscillator();
+            secondOscillator.connect(gainNode);
+            secondOscillator.type = 'sawtooth';
+            secondOscillator.frequency.value = 220; // A3 note
+            
+            secondOscillator.start();
+            setTimeout(() => {
+                secondOscillator.stop();
+            }, 200);
+        }, 250);
     }
 }
 
@@ -543,8 +584,57 @@ function animateAudioWave(event) {
     }
 }
 
+/**
+ * Update microphone level visualization
+ */
 function updateMicLevel(volume) {
-    micLevel.style.width = `${volume * 100}%`;
+    const micLevel = document.getElementById('mic-level');
+    if (micLevel) {
+        micLevel.style.width = `${volume * 100}%`;
+    }
+}
+
+// Replace the inline microphone level creation with a structured version
+function setupAudioVisualization() {
+    const visualizationDiv = document.querySelector('.visualization');
+    
+    // Clear existing content
+    visualizationDiv.innerHTML = '';
+    
+    // Create wave container
+    const waveContainer = document.createElement('div');
+    waveContainer.className = 'wave-container';
+    
+    // Create wave element
+    const wave = document.createElement('div');
+    wave.id = 'audio-wave';
+    wave.className = 'wave';
+    waveContainer.appendChild(wave);
+    
+    // Create mic level container
+    const micLevelContainer = document.createElement('div');
+    micLevelContainer.className = 'mic-level-container';
+    
+    // Create label
+    const micLabel = document.createElement('div');
+    micLabel.className = 'mic-level-label';
+    micLabel.textContent = 'Mic Input:';
+    
+    // Create mic level bar
+    const micLevelBar = document.createElement('div');
+    micLevelBar.className = 'mic-level-bar';
+    
+    // Create the level indicator
+    const micLevel = document.createElement('div');
+    micLevel.id = 'mic-level';
+    
+    micLevelBar.appendChild(micLevel);
+    micLevelContainer.appendChild(micLabel);
+    micLevelContainer.appendChild(micLevelBar);
+    
+    // Add to visualization
+    visualizationDiv.appendChild(waveContainer);
+    visualizationDiv.appendChild(micLevelContainer);
 }
 
 /**
@@ -553,26 +643,13 @@ function updateMicLevel(volume) {
 document.addEventListener('DOMContentLoaded', () => {
     initApp();
     
-    // Add BLE connect button
-    const btnContainer = document.createElement('div');
-    btnContainer.className = 'button-container';
-    btnContainer.style.textAlign = 'center';
-    btnContainer.style.margin = '20px 0';
+    // Use the existing BLE connect button instead of creating a new one
+    const bleButton = document.querySelector('.ble-button');
+    if (bleButton) {
+        bleButton.addEventListener('click', connectToBLE);
+    }
     
-    const bleButton = document.createElement('button');
-    bleButton.innerText = 'Connect to Braille Device';
-    bleButton.className = 'ble-button';
-    bleButton.style.padding = '10px 20px';
-    bleButton.style.backgroundColor = '#2196F3';
-    bleButton.style.color = 'white';
-    bleButton.style.border = 'none';
-    bleButton.style.borderRadius = '4px';
-    bleButton.style.cursor = 'pointer';
-    
-    bleButton.addEventListener('click', connectToBLE);
-    
-    btnContainer.appendChild(bleButton);
-    document.querySelector('main').prepend(btnContainer);
+    // The code to create a button has been removed since we now use the HTML one
 });
 
 // Handle page visibility changes to manage speech recognition
