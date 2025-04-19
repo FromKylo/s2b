@@ -1,3 +1,11 @@
+Created by kiloJoules³
+Apolonio - Model Design Lead
+Ignacio - Research Lead
+Manguni - Software Lead
+Mission - Hardware Lead
+
+> "Kahit 2.00 lang po, liligaya na po kami." - kJ³ Team
+
 # Speech to Braille Progressive Web App
 
    - **Introduction Phase** (12 seconds):
@@ -30,13 +38,27 @@ This progressive web app (PWA) converts speech to braille patterns and communica
 - Braille pattern visualization
 - BLE connectivity to hardware braille display
 - Offline functionality with service worker
-- Installable as a PWA on Android devices
+### Application Flow DiagramPWA on Android devices
 
-### Technical Stack
-
-- HTML5, CSS3, JavaScript
-- Web Speech API for speech recognition
-- Web Bluetooth API for BLE connectivity
+```mermaid
+flowchart TD
+    subgraph "Web Application Functions"
+        PM[Phase Manager] -->|"Phase transitions,\ntimers"| UI[UI Controller]
+        PM -->|"Start/Stop commands"| SR[Speech Recognition]
+        SR -->|"Recognized text"| TB[Text-to-Braille Converter]
+        TB -->|"Braille patterns"| UI
+        TB -->|"Dot arrays\nO:[1,2,3]"| BLE[BLE Communication]
+        UI -->|"Play prompts"| TTS[Text-to-Speech]
+        SW[Service Worker] -.->|"Offline functionality"| UI
+    end
+    
+    subgraph "External Components"
+        USER[User Speech] -->|"Audio input"| SR
+        BLE -->|"GATT write\nService: 19b10000-...\nChar: 19b10001-..."| HW[Hardware Display]
+        DB[Braille Database] -->|"Character mappings"| TB
+    end
+```
+ty
 - PWA features (manifest, service worker)
 - Responsive design for mobile devices
 
@@ -56,3 +78,19 @@ The app communicates with an ESP32-based braille display using the following BLE
 Data is sent in the format: `O:[1,2,3]` or `O:[[1,2],[3,4]]` where:
 - `O:` indicates output phase
 - The array represents braille dot patterns
+## System Architecture
+
+```mermaid
+graph LR
+    subgraph "Web Application"
+        A[Speech Recognition] --> B[Text-to-Braille Converter]
+        B --> C[BLE Communication]
+    end
+    
+    subgraph "Arduino Nano ESP32"
+        D[BLE Service] --> E[Braille Display Controller]
+        E --> F[Physical Braille Display]
+    end
+    
+    C -- "BLE Connection<br>Service: 19b10000-e8f2-537e-4f6c-d104768a1214<br>Char: 19b10001-e8f2-537e-4f6c-d104768a1214" --> D
+```
