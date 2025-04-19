@@ -1,4 +1,6 @@
 const CACHE_NAME = 'speech-to-braille-v1';
+
+// Ensure all resources exist before caching
 const urlsToCache = [
     '/',
     '/index.html',

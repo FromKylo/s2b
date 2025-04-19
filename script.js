@@ -81,8 +81,9 @@ function setupSpeechRecognition() {
             let interim = '';
             for (let i = event.resultIndex; i < event.results.length; i++) {
                 if (event.results[i].isFinal) {
-                    currentTranscript += event.results[i][0].transcript + ' ';
-                    const matches = brailleDB.searchWords(event.results[i][0].transcript);
+                    const recognizedWord = event.results[i][0].transcript.trim();
+                    currentTranscript += recognizedWord + ' ';
+                    const matches = brailleDB.searchWords(recognizedWord);
                     if (matches.length > 0) {
                         displayBrailleOutput(matches);
                         setTimeout(() => {
@@ -93,13 +94,13 @@ function setupSpeechRecognition() {
                     interim += event.results[i][0].transcript;
                 }
             }
-            
+
             // Display the recognized text
             recognizedText.innerHTML = `
                 <p>${currentTranscript}</p>
                 <p><em>${interim}</em></p>
             `;
-            
+
             // Animate the audio visualization
             animateAudioWave(event);
         };
@@ -194,10 +195,6 @@ function updateLanguageUI() {
 function speakText(text) {
     if ('speechSynthesis' in window) {
         const utterance = new SpeechSynthesisUtterance(text);
-        
-        // Set language based on current selection
-        utterance.lang = currentLanguage === 'en' ? 'en-US' : 'fil-PH';
-        
         window.speechSynthesis.speak(utterance);
     }
 }
@@ -351,10 +348,11 @@ function displayBrailleOutput(matches) {
 /**
  * Create a visual braille cell representation
  */
+// Corrected the braille dot layout to match the 1-4, 2-5, 3-6 configuration
 function createBrailleCell(dotsArray) {
     const cellElem = document.createElement('div');
     cellElem.className = 'braille-cell';
-    
+
     // Create 6 dots (2x3 grid)
     for (let i = 1; i <= 6; i++) {
         const dot = document.createElement('div');
@@ -363,8 +361,15 @@ function createBrailleCell(dotsArray) {
             dot.classList.add('active');
         }
         cellElem.appendChild(dot);
+
+        // Adjust layout for 1-4, 2-5, 3-6
+        if (i === 3) {
+            const spacer = document.createElement('div');
+            spacer.style.flexBasis = '100%';
+            cellElem.appendChild(spacer);
+        }
     }
-    
+
     return cellElem;
 }
 
