@@ -6,7 +6,6 @@ class SpeechRecognizer {
     constructor() {
         this.recognition = null;
         this.isRecognizing = false;
-        this.currentLanguage = 'en-US';
         this.interimResult = '';
         this.finalResult = '';
         this.onResultCallback = null;
@@ -16,6 +15,11 @@ class SpeechRecognizer {
         this.microphoneStream = null;
         this.visualizerBars = document.querySelectorAll('.wave-bar');
         this.visualizerAnimationFrame = null;
+        this.recognitionTimeout = null;
+        this.isAndroid = /Android/i.test(navigator.userAgent);
+        this.processingWord = false; // Prevent rapid processing of the same word
+        this.lastProcessedWord = '';
+        this.processingTimeout = null;
     }
     
     /**
@@ -34,7 +38,17 @@ class SpeechRecognizer {
         // Configure recognition options
         this.recognition.continuous = true;
         this.recognition.interimResults = true;
-        this.recognition.lang = this.currentLanguage;
+        
+        // Use a more global language setting to handle both English and Filipino
+        // This allows the browser to attempt to recognize either language
+        if (this.isAndroid) {
+            // On Android, better to use a specific language as fallback
+            this.recognition.lang = 'en-US';
+            logDebug('Using en-US for Android');
+        } else {
+            // On desktop, we can try to be more flexible
+            this.recognition.lang = 'en-US'; // Default to English but will try to detect
+        }
         
         // Set up recognition event handlers
         this.recognition.onresult = (event) => this.handleRecognitionResult(event);
@@ -65,6 +79,31 @@ class SpeechRecognizer {
             this.isRecognizing = true;
             logDebug('Speech recognition started');
             
+            // Clear any existing timeout
+            if (this.recognitionTimeout) {
+                clearTimeout(this.recognitionTimeout);
+            }
+            
+            // On Android, recognition often stops after a while, so restart it periodically
+            if (this.isAndroid) {
+                this.recognitionTimeout = setTimeout(() => {
+                    logDebug('Android recognition timeout - restarting');
+                    if (this.isRecognizing) {
+                        try {
+                            this.recognition.stop();
+                            setTimeout(() => {
+                                if (this.isRecognizing) {
+                                    this.recognition.start();
+                                    logDebug('Recognition restarted');
+                                }
+                            }, 300);
+                        } catch (error) {
+                            logDebug('Error in timeout restart: ' + error.message);
+                        }
+                    }
+                }, 8000); // 8 seconds timeout
+            }
+            
             // Start audio visualization
             this.startAudioVisualization();
             
@@ -82,31 +121,29 @@ class SpeechRecognizer {
      * Stop speech recognition
      */
     stop() {
+        if (this.recognitionTimeout) {
+            clearTimeout(this.recognitionTimeout);
+            this.recognitionTimeout = null;
+        }
+        
         if (this.recognition && this.isRecognizing) {
-            this.recognition.stop();
-            this.isRecognizing = false;
-            logDebug('Speech recognition stopped');
-            
-            // Stop audio visualization
-            this.stopAudioVisualization();
-            
-            // Update UI to show stopped state
-            this.updateVisualizerState(false);
-            
-            return true;
+            try {
+                this.recognition.stop();
+                this.isRecognizing = false;
+                logDebug('Speech recognition stopped');
+                
+                // Stop audio visualization
+                this.stopAudioVisualization();
+                
+                // Update UI to show stopped state
+                this.updateVisualizerState(false);
+                
+                return true;
+            } catch (error) {
+                logDebug('Error stopping recognition: ' + error.message);
+            }
         }
         return false;
-    }
-    
-    /**
-     * Set recognition language
-     */
-    setLanguage(langCode) {
-        this.currentLanguage = langCode;
-        if (this.recognition) {
-            this.recognition.lang = langCode;
-            logDebug(`Recognition language set to ${langCode}`);
-        }
     }
     
     /**
@@ -121,6 +158,7 @@ class SpeechRecognizer {
             
             if (event.results[i].isFinal) {
                 finalTranscript += transcript;
+                logDebug('Final transcript: ' + transcript);
             } else {
                 interimTranscript += transcript;
             }
@@ -129,17 +167,63 @@ class SpeechRecognizer {
         if (interimTranscript) {
             this.interimResult = interimTranscript;
             document.getElementById('interim-text').textContent = interimTranscript;
+            logDebug('Interim transcript: ' + interimTranscript);
+            
+            // Extract the last word from interim results for immediate processing
+            this.processLastWord(interimTranscript, false);
         }
         
         if (finalTranscript) {
             this.finalResult = finalTranscript;
             document.getElementById('final-text').textContent += ' ' + finalTranscript;
             
+            // Process the final transcript immediately
+            this.processLastWord(finalTranscript, true);
+            
             // Call result callback if provided
             if (this.onResultCallback) {
                 this.onResultCallback(finalTranscript);
             }
         }
+    }
+    
+    /**
+     * Process the last word from a transcript
+     */
+    processLastWord(transcript, isFinal) {
+        if (this.processingWord) return; // Avoid parallel processing
+        
+        const words = transcript.trim().split(/\s+/);
+        if (words.length === 0) return;
+        
+        const lastWord = words[words.length - 1].toLowerCase().replace(/[^\w]/g, '');
+        
+        // Prevent processing very short words from interim results
+        if (!isFinal && lastWord.length < 3) return;
+        
+        // Don't process the same word repeatedly
+        if (lastWord === this.lastProcessedWord) return;
+        
+        // Don't process empty words
+        if (!lastWord) return;
+        
+        // Set processing state
+        this.processingWord = true;
+        this.lastProcessedWord = lastWord;
+        
+        // Call the result callback with just the last word
+        if (this.onResultCallback) {
+            this.onResultCallback(lastWord);
+        }
+        
+        // Reset processing state after a short delay
+        if (this.processingTimeout) {
+            clearTimeout(this.processingTimeout);
+        }
+        
+        this.processingTimeout = setTimeout(() => {
+            this.processingWord = false;
+        }, 1000); // 1 second cooldown before processing another word
     }
     
     /**
@@ -293,7 +377,6 @@ class SpeechRecognizer {
     speak(text) {
         if ('speechSynthesis' in window) {
             const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = this.currentLanguage;
             window.speechSynthesis.speak(utterance);
         }
     }

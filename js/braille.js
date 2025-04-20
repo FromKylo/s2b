@@ -18,29 +18,64 @@ class BrailleTranslator {
         try {
             logDebug('Attempting to load braille database...');
             
-            // First try CSV
-            const success = await this.loadFromCSV();
+            // Try multiple paths for CSV
+            const possiblePaths = [
+                './braille-database.csv',
+                '../braille-database.csv',
+                '/s2b/braille-database.csv',
+                'https://fromkylo.github.io/s2b/braille-database.csv',
+                window.location.href.replace(/\/[^\/]*$/, '/braille-database.csv')
+            ];
             
-            if (!success) {
-                logDebug('CSV loading failed, trying JSON fallback...');
-                // Try JSON fallback
-                return await this.loadFromJSON();
+            logDebug('Trying the following paths: ' + possiblePaths.join(', '));
+            
+            let csvSuccess = false;
+            for (const path of possiblePaths) {
+                logDebug(`Trying to load CSV from: ${path}`);
+                try {
+                    csvSuccess = await this.loadFromCSV(path);
+                    if (csvSuccess) {
+                        logDebug(`Successfully loaded CSV from: ${path}`);
+                        break;
+                    }
+                } catch (e) {
+                    logDebug(`Failed to load from ${path}: ${e.message}`);
+                }
             }
             
-            return true;
+            if (!csvSuccess) {
+                logDebug('All CSV paths failed, trying embedded data...');
+                csvSuccess = await this.loadFromEmbeddedData();
+            }
+            
+            if (!csvSuccess) {
+                logDebug('Embedded data failed, trying JSON fallback...');
+                csvSuccess = await this.loadFromJSON();
+            }
+            
+            if (!csvSuccess) {
+                logDebug('Creating minimal emergency database');
+                this.createMinimalDatabase();
+            }
+            
+            return this.isLoaded;
         } catch (error) {
             logDebug('Error initializing braille database: ' + error.message);
             console.error('Database initialization error:', error);
-            return false;
+            
+            // Create minimal database as last resort
+            this.createMinimalDatabase();
+            return this.isLoaded;
         }
     }
     
     /**
      * Load the database from CSV file
      */
-    async loadFromCSV() {
+    async loadFromCSV(path) {
         try {
-            const response = await fetch('./braille-database.csv');
+            logDebug(`Fetching CSV from: ${path}`);
+            const response = await fetch(path);
             
             if (!response.ok) {
                 logDebug(`Failed to load CSV file: ${response.status} ${response.statusText}`);
@@ -59,6 +94,13 @@ class BrailleTranslator {
             // Show the first 100 characters to check format
             logDebug(`CSV preview: ${csvText.substring(0, 100)}...`);
             
+            // Detect if this is HTML instead of CSV (common with 404 pages)
+            if (csvText.trim().toLowerCase().startsWith('<!doctype html>') || 
+                csvText.trim().toLowerCase().startsWith('<html')) {
+                logDebug('Received HTML instead of CSV - likely a 404 page');
+                return false;
+            }
+            
             this.parseCSV(csvText);
             
             // Validate loaded data
@@ -73,69 +115,97 @@ class BrailleTranslator {
     }
     
     /**
-     * Load the database from JSON fallback
+     * Load from embedded minimal data
      */
-    async loadFromJSON() {
+    async loadFromEmbeddedData() {
         try {
-            const response = await fetch('./braille-data.json');
+            logDebug('Loading from embedded minimal data');
             
-            if (!response.ok) {
-                logDebug(`Failed to load JSON file: ${response.status} ${response.statusText}`);
+            // Basic embedded database for core functionality
+            const embeddedCSV = 
+`word,shortf,braille,array,lang
+a,a,⠁,"[[1]]",UEB
+b,b,⠃,"[[1,2]]",UEB
+c,c,⠉,"[[1,4]]",UEB
+d,d,⠙,"[[1,4,5]]",UEB
+e,e,⠑,"[[1,5]]",UEB
+f,f,⠋,"[[1,2,4]]",UEB
+g,g,⠛,"[[1,2,4,5]]",UEB
+h,h,⠓,"[[1,2,5]]",UEB
+i,i,⠊,"[[2,4]]",UEB
+j,j,⠚,"[[2,4,5]]",UEB
+k,k,⠅,"[[1,3]]",UEB
+l,l,⠇,"[[1,2,3]]",UEB
+m,m,⠍,"[[1,3,4]]",UEB
+n,n,⠝,"[[1,3,4,5]]",UEB
+o,o,⠕,"[[1,3,5]]",UEB
+p,p,⠏,"[[1,2,3,4]]",UEB
+q,q,⠟,"[[1,2,3,4,5]]",UEB
+r,r,⠗,"[[1,2,3,5]]",UEB
+s,s,⠎,"[[2,3,4]]",UEB
+t,t,⠞,"[[2,3,4,5]]",UEB
+u,u,⠥,"[[1,3,6]]",UEB
+v,v,⠧,"[[1,2,3,6]]",UEB
+w,w,⠺,"[[2,4,5,6]]",UEB
+x,x,⠭,"[[1,3,4,6]]",UEB
+y,y,⠽,"[[1,3,4,5,6]]",UEB
+z,z,⠵,"[[1,3,5,6]]",UEB`;
+            
+            this.parseCSV(embeddedCSV);
+            
+            // Validate loaded data
+            this.validateDatabase();
+            
+            if (this.isLoaded) {
+                logDebug('Successfully loaded from embedded data');
+                return true;
+            } else {
+                logDebug('Failed to parse embedded data');
                 return false;
             }
-            
-            const json = await response.json();
-            
-            if (!json || !Array.isArray(json)) {
-                logDebug('Invalid JSON format');
-                return false;
-            }
-            
-            logDebug(`JSON loaded with ${json.length} entries, parsing...`);
-            
-            // Convert JSON format to our database format
-            this.database = { 'UEB': {}, 'Philippine': {} };
-            
-            for (const entry of json) {
-                if (!entry.word || !entry.array) continue;
-                
-                const language = entry.lang || 'UEB';
-                
-                if (!this.database[language]) {
-                    this.database[language] = {};
-                }
-                
-                // Format array as string if it's an actual array
-                const arrayStr = Array.isArray(entry.array) ? 
-                    JSON.stringify(entry.array) : 
-                    entry.array;
-                
-                // For backward compatibility, wrap single cell arrays in an extra array
-                let finalArrayStr = arrayStr;
-                if (arrayStr.startsWith('[') && !arrayStr.startsWith('[[')) {
-                    finalArrayStr = `[${arrayStr}]`;
-                }
-                
-                this.database[language][entry.word] = {
-                    braille: entry.braille || '',
-                    array: finalArrayStr
-                };
-                
-                this.totalEntries++;
-            }
-            
-            this.isLoaded = this.totalEntries > 0;
-            this.loadAttempted = true;
-            
-            logDebug(`JSON loaded successfully with ${this.totalEntries} entries`);
-            return this.isLoaded;
         } catch (error) {
-            logDebug('Error loading JSON: ' + error.message);
-            console.error('JSON loading error:', error);
+            logDebug('Error loading embedded data: ' + error.message);
             return false;
         }
     }
-
+    
+    /**
+     * Create a minimal database with just the alphabet
+     * This is a last resort if all other loading methods fail
+     */
+    createMinimalDatabase() {
+        logDebug('Creating minimal emergency database');
+        
+        // Initialize database
+        this.database = { 'UEB': {} };
+        this.totalEntries = 0;
+        
+        // Add basic alphabet
+        const alphabet = 'abcdefghijklmnopqrstuvwxyz';
+        const patterns = [
+            [[1]], [[1,2]], [[1,4]], [[1,4,5]], [[1,5]],
+            [[1,2,4]], [[1,2,4,5]], [[1,2,5]], [[2,4]], [[2,4,5]],
+            [[1,3]], [[1,2,3]], [[1,3,4]], [[1,3,4,5]], [[1,3,5]],
+            [[1,2,3,4]], [[1,2,3,4,5]], [[1,2,3,5]], [[2,3,4]], [[2,3,4,5]],
+            [[1,3,6]], [[1,2,3,6]], [[2,4,5,6]], [[1,3,4,6]], [[1,3,4,5,6]], [[1,3,5,6]]
+        ];
+        
+        for (let i = 0; i < alphabet.length; i++) {
+            const letter = alphabet[i];
+            const pattern = JSON.stringify(patterns[i]);
+            
+            this.database['UEB'][letter] = {
+                braille: '',  // No Unicode braille character
+                array: pattern
+            };
+            
+            this.totalEntries++;
+        }
+        
+        this.isLoaded = true;
+        logDebug(`Created minimal database with ${this.totalEntries} entries`);
+    }
+    
     /**
      * Parse CSV data into a structured database
      */
@@ -303,6 +373,7 @@ class BrailleTranslator {
 
     /**
      * Translate a word to braille pattern array
+     * Searches across all languages
      */
     translateWord(word) {
         word = word.toLowerCase().trim();
@@ -312,25 +383,42 @@ class BrailleTranslator {
             return null;
         }
         
-        // Check if word exists in current language
-        if (this.database[this.currentLanguage][word]) {
-            return {
-                word: word,
-                array: this.database[this.currentLanguage][word].array,
-                braille: this.database[this.currentLanguage][word].braille
-            };
-        }
+        // Try all languages starting with UEB as primary
+        const languages = Object.keys(this.database);
         
-        // Check if word exists in UEB as fallback
-        if (this.currentLanguage !== 'UEB' && this.database['UEB'][word]) {
+        // Prioritize UEB (English)
+        if (languages.includes('UEB') && this.database['UEB'][word]) {
             return {
                 word: word,
                 array: this.database['UEB'][word].array,
-                braille: this.database['UEB'][word].braille
+                braille: this.database['UEB'][word].braille,
+                language: 'UEB'
             };
         }
         
-        logDebug(`Word "${word}" not found in database`);
+        // Then try Philippine (Filipino)
+        if (languages.includes('Philippine') && this.database['Philippine'][word]) {
+            return {
+                word: word,
+                array: this.database['Philippine'][word].array,
+                braille: this.database['Philippine'][word].braille,
+                language: 'Philippine'
+            };
+        }
+        
+        // If not found, try all other languages
+        for (const lang of languages) {
+            if (lang !== 'UEB' && lang !== 'Philippine' && this.database[lang][word]) {
+                return {
+                    word: word,
+                    array: this.database[lang][word].array,
+                    braille: this.database[lang][word].braille,
+                    language: lang
+                };
+            }
+        }
+        
+        logDebug(`Word "${word}" not found in any language database`);
         return null;
     }
     
@@ -400,10 +488,14 @@ class BrailleCellRenderer {
                 cell.className = 'braille-cell';
                 
                 // Create 6 dots in each cell
+                // Dot positions in a braille cell should be:
+                // 1 4
+                // 2 5
+                // 3 6
                 for (let i = 1; i <= 6; i++) {
                     const dot = document.createElement('div');
                     dot.className = 'braille-dot';
-                    dot.dataset.position = i;
+                    dot.dataset.position = i; // Important: this enables correct grid positioning in CSS
                     
                     // Check if this dot should be active
                     if (dots.includes(i)) {

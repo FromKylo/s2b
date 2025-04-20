@@ -2,8 +2,12 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#2196F3">
+    <meta name="description" content="Speech to Braille Converter App">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Speech to Braille Translator</title>
     <link rel="stylesheet" href="css/styles.css">
     <link rel="manifest" href="manifest.json">
@@ -20,10 +24,11 @@
     </header>
 
     <main>
-        <!-- Add database status div -->
-        <div id="database-status" class="status-message hidden">
-            <span class="status-icon">⚠️</span>
-            <span class="status-text">Database not loaded. Some features may not work.</span>
+        <!-- Database status div with retry button -->
+        <div id="database-status" class="status-message loading">
+            <span class="status-icon">⏳</span>
+            <span class="status-text">Loading database...</span>
+            <button id="retry-database" class="btn btn-small">Retry</button>
         </div>
         
         <!-- Phase 1: Introduction -->
@@ -32,13 +37,7 @@
                 <h2>Welcome to Speech-to-Braille</h2>
                 <p>This app converts your spoken words into braille patterns.</p>
                 <p>Connect your braille display device via Bluetooth and begin speaking.</p>
-                <div class="language-selector">
-                    <label for="language-select">Select Language:</label>
-                    <select id="language-select">
-                        <option value="UEB" selected>UEB (Universal English Braille)</option>
-                        <option value="Philippine">Philippine Braille</option>
-                    </select>
-                </div>
+                <!-- Language selector removed -->
                 <button id="start-btn" class="btn btn-primary">Start Speaking</button>
                 <button id="test-btn" class="btn btn-secondary">Test Braille Patterns</button>
             </div>
@@ -62,7 +61,6 @@
                 </div>
                 <div id="interim-text" class="speech-text"></div>
                 <div id="final-text" class="speech-text"></div>
-                <button id="stop-btn" class="btn btn-warning">Stop</button>
                 <button id="clear-btn" class="btn">Clear</button>
             </div>
         </section>
@@ -84,7 +82,14 @@
     </main>
 
     <footer>
-        <div id="debug-toggle">Debug Console</div>
+        <div class="footer-controls">
+            <label class="toggle-switch">
+                <input type="checkbox" id="sound-toggle" checked>
+                <span class="toggle-slider"></span>
+                <span class="toggle-label">Sound</span>
+            </label>
+            <div id="debug-toggle">Debug Console</div>
+        </div>
         <div id="debug-console" class="hidden">
             <div id="debug-output"></div>
             <div class="debug-input">
@@ -94,6 +99,8 @@
             <div class="debug-tools">
                 <button id="speed-test-btn" class="btn btn-small">BLE Speed Test</button>
                 <button id="clear-debug-btn" class="btn btn-small">Clear Log</button>
+                <button id="debug-clear" class="btn btn-small">Clear</button>
+                <button id="debug-test-braille" class="btn btn-small">Test Braille Layout</button>
             </div>
         </div>
     </footer>

@@ -1,14 +1,18 @@
 const CACHE_NAME = 's2b-cache-v1';
+const BASE_URL = self.location.pathname.replace('service-worker.js', '');
+
 const ASSETS_TO_CACHE = [
-    '/',
-    '/index.html',
-    '/css/styles.css',
-    '/js/app.js',
-    '/js/ble.js',
-    '/js/braille.js',
-    '/js/speech.js',
-    '/manifest.json',
-    '/braille-database.csv'
+    // Use relative paths
+    './',
+    './index.html',
+    './css/styles.css',
+    './js/app.js',
+    './js/ble.js',
+    './js/braille.js',
+    './js/speech.js',
+    './manifest.json',
+    './braille-database.csv',
+    './braille-data.json'
 ];
 
 // Install event - cache static assets
@@ -17,7 +21,15 @@ self.addEventListener('install', event => {
         caches.open(CACHE_NAME)
             .then(cache => {
                 console.log('Caching app assets');
-                return cache.addAll(ASSETS_TO_CACHE);
+                // Use Promise.all instead of cache.addAll to handle individual file failures
+                const cachePromises = ASSETS_TO_CACHE.map(url => {
+                    return cache.add(url).catch(error => {
+                        console.error(`Failed to cache: ${url}`, error);
+                        // Continue despite error
+                        return Promise.resolve();
+                    });
+                });
+                return Promise.all(cachePromises);
             })
             .then(() => self.skipWaiting())
     );
