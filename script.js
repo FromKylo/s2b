@@ -2,6 +2,16 @@
  * Speech-to-Braille Progressive Web App
  */
 
+// Initialize empty bleDebug object to prevent reference errors
+window.bleDebug = {
+    log: function(msg) { console.log(msg); },
+    error: function(msg) { console.error(msg); },
+    success: function(msg) { console.log(msg); },
+    warn: function(msg) { console.warn(msg); },
+    send: function() { console.warn('BLE Debug not fully initialized yet'); },
+    toggle: function() { console.warn('BLE Debug not fully initialized yet'); }
+};
+
 // DOM Elements
 const introPhase = document.getElementById('intro-phase');
 const recordingPhase = document.getElementById('recording-phase');

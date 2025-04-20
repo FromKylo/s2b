@@ -38,13 +38,16 @@ class BrailleDatabase {
                     const line = lines[i].trim();
                     if (line) {
                         try {
-                            // Split by comma but handle quoted fields properly
-                            const [word, shortf, braille, array, lang] = line.split(',');
+                            // Properly parse CSV with quoted fields
+                            const fields = this.parseCSVLine(line);
+                            if (fields.length < 4) continue; // Skip invalid entries
                             
-                            if (!word || !array) continue; // Skip invalid entries
+                            const [word, shortf, braille, array, lang] = fields;
                             
-                            // Clean up the array field by removing quotes
-                            const cleanArray = array.replace(/"/g, '').trim();
+                            if (!word || !array) continue; // Skip entries without word or array
+                            
+                            // Clean up the array field
+                            const cleanArray = array.trim();
                             
                             const entry = {
                                 word: word.trim(),
@@ -60,6 +63,8 @@ class BrailleDatabase {
                                 
                                 // Also add to the word map for faster lookups
                                 this.wordMap.set(entry.word.toLowerCase(), entry);
+                            } else {
+                                console.warn(`Skipped entry with invalid array format: ${word}, array: ${array}`);
                             }
                         } catch (lineError) {
                             console.warn(`Error parsing line ${i}: ${line}`, lineError);
@@ -78,6 +83,38 @@ class BrailleDatabase {
             return false;
         }
     }
+    
+    /**
+     * Parse a CSV line properly handling quoted fields
+     * @param {string} line - A line from the CSV file
+     * @returns {Array} - Array of field values
+     */
+    parseCSVLine(line) {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+        
+        for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            
+            if (char === '"') {
+                // Toggle quote mode
+                inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+                // End of field
+                result.push(current);
+                current = '';
+            } else {
+                current += char;
+            }
+        }
+        
+        // Don't forget the last field
+        result.push(current);
+        
+        // Clean up any remaining quotes
+        return result.map(field => field.replace(/"/g, '').trim());
+    }
 
     /**
      * Parse a string representation of a braille dot array into actual arrays
@@ -91,38 +128,51 @@ class BrailleDatabase {
             // Clean and fix common formatting issues in array strings
             let cleanArrayStr = arrayStr.trim();
             
-            // Log problematic data for debugging
-            if (cleanArrayStr.includes('[[') && !cleanArrayStr.includes(']]')) {
-                console.log('Fixing malformed array:', cleanArrayStr);
-            }
+            // Remove any extra quotes that might have been missed
+            cleanArrayStr = cleanArrayStr.replace(/^"|"$/g, '');
             
             // Fix incomplete arrays like [[1 -> [[1]]
-            if (/\[\[\d+$/.test(cleanArrayStr)) {
+            if (/\[\[\d+(?:,\d+)*$/.test(cleanArrayStr)) {
                 cleanArrayStr += ']]';
             }
             // Fix incomplete arrays like [[1] -> [[1]]
-            else if (/\[\[\d+\]$/.test(cleanArrayStr)) {
+            else if (/\[\[\d+(?:,\d+)*\]$/.test(cleanArrayStr)) {
                 cleanArrayStr += ']';
             }
             
             // Handle single values that should be in nested array format
-            if (/^\[\d+(,\d+)*\]$/.test(cleanArrayStr)) {
+            if (/^\[\d+(?:,\d+)*\]$/.test(cleanArrayStr)) {
                 // Convert [1,2,3] to [[1,2,3]]
                 cleanArrayStr = '[' + cleanArrayStr + ']';
+            }
+            
+            // Handle plain number arrays without brackets
+            if (/^\d+(?:,\d+)*$/.test(cleanArrayStr)) {
+                cleanArrayStr = '[[' + cleanArrayStr + ']]';
             }
             
             // Parse JSON - all arrays now use the same double-nested format:
             // [[1,2,3]] for single cell and [[1,2],[3,4]] for multi-cell
             const parsed = JSON.parse(cleanArrayStr);
+            
+            // Validate the array structure
+            if (!Array.isArray(parsed) || parsed.length === 0) {
+                return null;
+            }
+            
+            // Ensure we have a properly nested array structure
+            if (!Array.isArray(parsed[0])) {
+                return [parsed]; // Wrap in an extra array
+            }
+            
             return parsed;
         } catch (e) {
-            // More detailed error logging
-            console.error('Error parsing array string:', e, 'String value:', arrayStr);
+            // More detailed error logging to debug console
+            console.warn('Error parsing array string:', arrayStr, e.message);
             
-            // Try to salvage single-digit arrays
-            if (/^\[\[?\d\]?\]?$/.test(arrayStr)) {
-                const digit = arrayStr.match(/\d/)[0];
-                const num = parseInt(digit, 10);
+            // Try to salvage simple digit arrays
+            if (/^\d+$/.test(arrayStr)) {
+                const num = parseInt(arrayStr, 10);
                 return [[num]]; // Return in proper nested format
             }
             
