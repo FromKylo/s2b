@@ -577,3 +577,79 @@ button {
     padding: 5px;
     border: 1px solid rgba(0, 0, 0, 0.1);
 }
+
+.braille-cells {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin: 10px 0;
+}
+
+.braille-cell {
+    display: inline-flex;
+    flex-wrap: wrap;
+    justify-content: space-around;
+    width: 60px;
+    height: 90px;
+    padding: 10px;
+    background-color: var(--accent-color);
+    border-radius: 8px;
+    position: relative;
+}
+
+.braille-dot {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background-color: var(--braille-dot-inactive);
+    transition: background-color 0.2s;
+    margin: 4px;
+}
+
+.braille-dot.active {
+    background-color: var(--braille-dot-active);
+}
+
+.word-info {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    font-size: 0.8rem;
+    margin-top: 5px;
+    color: var(--secondary-color);
+}
+
+.word-language,
+.word-cells {
+    background-color: var(--accent-color);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.cell-label {
+    position: absolute;
+    bottom: -20px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 0.7rem;
+    color: var(--secondary-color);
+}
+
+.test-status {
+    padding: 10px;
+    margin: 10px 0;
+    background-color: var(--accent-color);
+    border-radius: 4px;
+    text-align: center;
+}
+
+.test-status.success {
+    background-color: #4caf50;
+    color: white;
+}
+
+.test-status.error {
+    background-color: #f44336;
+    color: white;
+}

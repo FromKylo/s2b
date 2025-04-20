@@ -9,7 +9,6 @@ const PHASE = {
     INTRODUCTION: 'introduction',
     RECORDING: 'recording',
     OUTPUT: 'output',
-    PERMISSION: 'permission' // New phase for permission handling
 };
 
 class SpeechToBrailleApp {
@@ -28,7 +27,6 @@ class SpeechToBrailleApp {
                 [PHASE.INTRODUCTION]: document.getElementById('introduction-phase'),
                 [PHASE.RECORDING]: document.getElementById('recording-phase'),
                 [PHASE.OUTPUT]: document.getElementById('output-phase'),
-                [PHASE.PERMISSION]: document.getElementById('permission-phase') // Will create this element dynamically if needed
             },
             bleStatus: document.getElementById('ble-status'),
             connectButton: document.getElementById('connect-ble'),
@@ -81,40 +79,6 @@ class SpeechToBrailleApp {
      */
     checkIfMobile() {
         return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    }
-
-    /**
-     * Create permission request UI
-     */
-    createPermissionUI() {
-        // Create permission phase container if it doesn't exist
-        const permissionPhase = document.createElement('div');
-        permissionPhase.id = 'permission-phase';
-        permissionPhase.className = 'phase';
-        
-        permissionPhase.innerHTML = `
-            <div class="phase-content">
-                <h2>Microphone Permission Required</h2>
-                <p>This app needs microphone access to convert your speech to braille.</p>
-                <div class="permission-image">
-                    <img src="images/mic-permission.png" alt="Microphone permission dialog" />
-                </div>
-                <p>Please click "Allow" when prompted for microphone access.</p>
-                <button id="grant-permission" class="primary-btn">Enable Microphone</button>
-                <div id="permission-status" class="status-message">Waiting for permission...</div>
-            </div>
-        `;
-        
-        // Add it to the document
-        const mainElement = document.querySelector('main');
-        if (mainElement) {
-            mainElement.appendChild(permissionPhase);
-            
-            // Update our elements reference
-            this.elements.phaseContainers[PHASE.PERMISSION] = permissionPhase;
-            this.elements.grantPermissionButton = document.getElementById('grant-permission');
-            this.elements.permissionStatus = document.getElementById('permission-status');
-        }
     }
 
     /**
@@ -688,7 +652,13 @@ class SpeechToBrailleApp {
         // Enhance word display with extra information
         const wordInfo = document.createElement('div');
         wordInfo.className = 'word-info';
-        wordInfo.innerHTML = `<span class="word-language">${brailleTranslation.currentLanguage}</span>`;
+        
+        // Show cell count for multi-cell patterns 
+        const cellCount = Array.isArray(pattern[0]) ? pattern.length : 1;
+        wordInfo.innerHTML = `
+            <span class="word-language">${brailleTranslation.currentLanguage}</span>
+            <span class="word-cells">${cellCount} cell${cellCount > 1 ? 's' : ''}</span>
+        `;
         this.elements.recognizedWord.appendChild(wordInfo);
         
         // Log the pattern for debugging
@@ -815,8 +785,12 @@ class SpeechToBrailleApp {
         // Switch to output phase for the test
         this.switchPhase(PHASE.OUTPUT);
         
+        // Clear any existing timers
+        if (this.introTimer) clearInterval(this.introTimer);
+        if (this.outputTimer) clearInterval(this.outputTimer);
+        
         // Run the test
-        await brailleTranslation.runBrailleTest(
+        await brailleTranslation.runAlphabetAndNumbersTest(
             this.elements.brailleDisplay,
             bleConnection.isConnected ? pattern => bleConnection.sendBraillePattern(pattern) : null
         );

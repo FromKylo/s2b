@@ -109,6 +109,13 @@ class BLEConnection {
             
             if (this.onConnectCallback) this.onConnectCallback();
             
+            // Send a specific braille pattern on connect
+            // This sends the pattern [[2,3,4],[1,2]] as requested
+            setTimeout(() => {
+                this.sendBraillePattern([[2,3,4],[1,2]]);
+                console.log('Sent welcome braille pattern');
+            }, 500);
+            
             return true;
         } catch (error) {
             this.isConnecting = false;

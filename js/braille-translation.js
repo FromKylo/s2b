@@ -170,22 +170,40 @@ class BrailleTranslation {
      * @returns {Array|null} - The braille dot pattern or null if not found
      */
     translateWord(word) {
-        if (!word) return null;
+        if (!word || typeof word !== 'string') return null;
         
-        // Try exact word match first
-        word = word.toLowerCase().trim();
-        const lang = this.currentLanguage;
+        // Clean up the word
+        const cleanWord = word.toLowerCase().trim();
+        if (cleanWord.length === 0) return null;
         
-        if (this.brailleDatabase[lang] && this.brailleDatabase[lang][word]) {
-            return this.brailleDatabase[lang][word].array;
+        // Check if we have an exact match for the complete word
+        for (const lang of this.languages) {
+            if (this.brailleDatabase[lang] && this.brailleDatabase[lang][cleanWord]) {
+                console.log(`Found exact match for word "${cleanWord}" in ${lang}`);
+                return this.brailleDatabase[lang][cleanWord].array;
+            }
         }
         
-        // If not found and word has multiple characters, try character by character
-        if (word.length > 1) {
+        // If no exact match, check for contractions or compound symbols
+        // This is important for multi-cell braille patterns
+        const lang = this.currentLanguage;
+        if (this.brailleDatabase[lang]) {
+            // Try to find a multi-cell pattern (like 'one', 'two', etc.)
+            const multiCellMatches = Object.entries(this.brailleDatabase[lang])
+                .filter(([key, value]) => key === cleanWord && Array.isArray(value.array) && Array.isArray(value.array[0]));
+            
+            if (multiCellMatches.length > 0) {
+                console.log(`Found multi-cell match for "${cleanWord}": ${JSON.stringify(multiCellMatches[0][1].array)}`);
+                return multiCellMatches[0][1].array;
+            }
+        }
+
+        // If still no match, try letter by letter translation
+        if (cleanWord.length > 1) {
             const letterArrays = [];
             let allFound = true;
             
-            for (const char of word) {
+            for (const char of cleanWord) {
                 if (this.brailleDatabase[lang] && this.brailleDatabase[lang][char]) {
                     letterArrays.push(this.brailleDatabase[lang][char].array[0]);
                 } else {
@@ -195,12 +213,12 @@ class BrailleTranslation {
             }
             
             // Only return if we found patterns for all characters
-            if (allFound && letterArrays.length === word.length) {
+            if (allFound && letterArrays.length === cleanWord.length) {
                 return letterArrays;
             }
         }
         
-        // Otherwise return null
+        // Return null if no match found
         return null;
     }
 
@@ -281,17 +299,24 @@ class BrailleTranslation {
             // Generate test sequence - all letters and numbers
             const letters = 'abcdefghijklmnopqrstuvwxyz'.split('');
             const numbers = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
-            const testItems = [...letters, ...numbers];
+            
+            // Add some common two-cell patterns to test multi-cell functionality
+            const commonWords = ['and', 'the', 'with', 'for'];
+            
+            const testItems = [...letters, ...numbers, ...commonWords];
             
             // Run the test sequence
             for (let i = 0; i < testItems.length; i++) {
                 const item = testItems[i];
+                
                 statusElement.textContent = `Testing: ${item} (${i+1}/${testItems.length})`;
                 
                 // Get braille pattern
                 const pattern = this.translateWord(item);
                 
                 if (pattern) {
+                    console.log(`Testing pattern for "${item}":`, pattern);
+                    
                     // Display pattern
                     this.renderBrailleCells(pattern, container);
                     
@@ -300,8 +325,8 @@ class BrailleTranslation {
                         await sendCallback(pattern);
                     }
                     
-                    // Wait 0.5 seconds
-                    await new Promise(resolve => setTimeout(resolve, 500));
+                    // Wait 0.8 seconds so the pattern can be observed
+                    await new Promise(resolve => setTimeout(resolve, 800));
                 } else {
                     console.warn(`No pattern found for: ${item}`);
                 }
