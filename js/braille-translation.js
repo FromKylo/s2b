@@ -8,6 +8,8 @@ class BrailleTranslation {
         this.brailleDatabase = {};
         this.languages = ['UEB', 'Philippine'];
         this.currentLanguage = 'UEB';
+        this.cacheKey = 'braille_database_cache';
+        this.cacheVersion = '1.0'; // Update this when database structure changes
     }
 
     /**
@@ -15,17 +17,75 @@ class BrailleTranslation {
      */
     async initialize() {
         try {
-            // Try to load from CSV first
+            // Try to load from cache first
+            if (this.loadFromCache()) {
+                console.log('Braille database loaded from cache');
+                return true;
+            }
+            
+            // If not in cache, load from CSV
             const database = await this.loadFromCSV('braille-database.csv');
             this.brailleDatabase = database;
             console.log('Braille database loaded from CSV');
+            
+            // Save to cache for future use
+            this.saveToCache();
+            
             return true;
         } catch (error) {
-            console.error('Error loading braille database from CSV:', error);
-            // Fallback to embedded data if necessary
-            // Currently this is just a placeholder - in a real app you'd have
-            // a fallback JSON embedded in the code
+            console.error('Error loading braille database:', error);
             return false;
+        }
+    }
+    
+    /**
+     * Load braille database from cache
+     * @returns {boolean} - True if loaded from cache successfully
+     */
+    loadFromCache() {
+        try {
+            const cacheData = localStorage.getItem(this.cacheKey);
+            if (!cacheData) return false;
+            
+            const cache = JSON.parse(cacheData);
+            
+            // Check if cache version matches
+            if (cache.version !== this.cacheVersion) {
+                console.log('Cache version mismatch, will reload from source');
+                return false;
+            }
+            
+            // Check if cache has expired (24 hours)
+            const now = new Date().getTime();
+            if (now - cache.timestamp > 24 * 60 * 60 * 1000) {
+                console.log('Cache expired, will reload from source');
+                return false;
+            }
+            
+            this.brailleDatabase = cache.data;
+            return true;
+        } catch (error) {
+            console.error('Error loading from cache:', error);
+            return false;
+        }
+    }
+    
+    /**
+     * Save braille database to cache
+     */
+    saveToCache() {
+        try {
+            const cache = {
+                version: this.cacheVersion,
+                timestamp: new Date().getTime(),
+                data: this.brailleDatabase
+            };
+            
+            localStorage.setItem(this.cacheKey, JSON.stringify(cache));
+            console.log('Braille database saved to cache');
+        } catch (error) {
+            console.error('Error saving to cache:', error);
+            // Cache errors are non-fatal, so we just log them
         }
     }
 
@@ -123,14 +183,19 @@ class BrailleTranslation {
         // If not found and word has multiple characters, try character by character
         if (word.length > 1) {
             const letterArrays = [];
+            let allFound = true;
+            
             for (const char of word) {
                 if (this.brailleDatabase[lang] && this.brailleDatabase[lang][char]) {
                     letterArrays.push(this.brailleDatabase[lang][char].array[0]);
+                } else {
+                    allFound = false;
+                    break;
                 }
             }
             
             // Only return if we found patterns for all characters
-            if (letterArrays.length === word.length) {
+            if (allFound && letterArrays.length === word.length) {
                 return letterArrays;
             }
         }
@@ -171,24 +236,88 @@ class BrailleTranslation {
      * @param {Element} container - DOM element to render cells into
      */
     renderBrailleCells(pattern, container) {
-        // Clear the container
+        if (!pattern || !container) return;
+        
+        // Clear previous content
         container.innerHTML = '';
         
-        if (!pattern) return;
+        // Create cells container
+        const cellsContainer = document.createElement('div');
+        cellsContainer.className = 'braille-cells-container';
         
-        // Check if it's a nested array (multiple cells)
-        const isNestedArray = Array.isArray(pattern[0]);
+        if (Array.isArray(pattern)) {
+            if (pattern.length === 0) return;
+            
+            // Check if it's a multi-cell pattern
+            if (Array.isArray(pattern[0])) {
+                // Handle multi-cell pattern
+                for (const cellPattern of pattern) {
+                    const cellElement = this.createBrailleCellHTML(cellPattern);
+                    cellsContainer.appendChild(cellElement);
+                }
+            } else {
+                // Single cell pattern
+                const cellElement = this.createBrailleCellHTML(pattern);
+                cellsContainer.appendChild(cellElement);
+            }
+        }
         
-        if (isNestedArray) {
-            // Render each cell
-            pattern.forEach(cellPattern => {
-                const cellElement = this.createBrailleCellHTML(cellPattern);
-                container.appendChild(cellElement);
-            });
-        } else {
-            // Single cell
-            const cellElement = this.createBrailleCellHTML(pattern);
-            container.appendChild(cellElement);
+        container.appendChild(cellsContainer);
+    }
+
+    /**
+     * Run a comprehensive alphabet and numbers test
+     * @param {Element} container - Container to display braille patterns
+     * @param {Function} sendCallback - Function to send patterns to hardware
+     * @returns {Promise<void>}
+     */
+    async runAlphabetAndNumbersTest(container, sendCallback) {
+        const statusElement = document.createElement('div');
+        statusElement.className = 'test-status';
+        statusElement.textContent = 'Running braille test...';
+        container.appendChild(statusElement);
+        
+        try {
+            // Generate test sequence - all letters and numbers
+            const letters = 'abcdefghijklmnopqrstuvwxyz'.split('');
+            const numbers = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+            const testItems = [...letters, ...numbers];
+            
+            // Run the test sequence
+            for (let i = 0; i < testItems.length; i++) {
+                const item = testItems[i];
+                statusElement.textContent = `Testing: ${item} (${i+1}/${testItems.length})`;
+                
+                // Get braille pattern
+                const pattern = this.translateWord(item);
+                
+                if (pattern) {
+                    // Display pattern
+                    this.renderBrailleCells(pattern, container);
+                    
+                    // Send to hardware if callback provided
+                    if (sendCallback && typeof sendCallback === 'function') {
+                        await sendCallback(pattern);
+                    }
+                    
+                    // Wait 0.5 seconds
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                } else {
+                    console.warn(`No pattern found for: ${item}`);
+                }
+            }
+            
+            // Test complete
+            statusElement.textContent = 'Test complete!';
+            statusElement.className = 'test-status success';
+            setTimeout(() => {
+                statusElement.remove();
+                container.innerHTML = '';
+            }, 2000);
+        } catch (error) {
+            console.error('Error during braille test:', error);
+            statusElement.textContent = `Test error: ${error.message}`;
+            statusElement.className = 'test-status error';
         }
     }
 
@@ -219,6 +348,20 @@ class BrailleTranslation {
         
         // Clear at the end
         container.innerHTML = '';
+    }
+
+    /**
+     * Clear cached database
+     */
+    clearCache() {
+        try {
+            localStorage.removeItem(this.cacheKey);
+            console.log('Braille database cache cleared');
+            return true;
+        } catch (error) {
+            console.error('Error clearing cache:', error);
+            return false;
+        }
     }
 }
 

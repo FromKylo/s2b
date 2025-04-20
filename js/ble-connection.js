@@ -218,8 +218,24 @@ class BLEConnection {
         if (!pattern) return false;
         
         try {
+            // Normalize pattern format to ensure proper handling of multi-cell patterns
+            let normalizedPattern;
+            
+            // Check if it's already a multi-cell pattern (array of arrays)
+            if (Array.isArray(pattern) && Array.isArray(pattern[0])) {
+                normalizedPattern = pattern;
+            } else if (Array.isArray(pattern)) {
+                // It's a single-cell pattern, wrap it in an array
+                normalizedPattern = [pattern];
+            } else {
+                console.error('Invalid pattern format:', pattern);
+                return false;
+            }
+            
             // Format: "O:[[1,2],[3,4]]" - O: prefix indicates output phase
-            const dataString = `O:${JSON.stringify(pattern)}`;
+            const dataString = `O:${JSON.stringify(normalizedPattern)}`;
+            console.log('Sending braille pattern:', dataString);
+            
             return await this.sendData(dataString);
         } catch (error) {
             console.error('Error sending braille pattern:', error);

@@ -71,6 +71,9 @@ class SpeechToBrailleApp {
         
         // Bind events
         this.bindEvents();
+
+        // Set up additional UI controls
+        this.setupUIControls();
     }
 
     /**
@@ -881,6 +884,73 @@ class SpeechToBrailleApp {
         this.elements.debugOutput.scrollTop = this.elements.debugOutput.scrollHeight;
         
         console.log(`[${type}] ${message}`);
+    }
+
+    /**
+     * Set up additional UI controls
+     */
+    setupUIControls() {
+        // Add handler for braille test button
+        const brailleTestBtn = document.getElementById('braille-test-btn');
+        if (brailleTestBtn) {
+            brailleTestBtn.addEventListener('click', async () => {
+                // Check if we're already in a test
+                if (this.isRunningTest) return;
+                
+                this.isRunningTest = true;
+                brailleTestBtn.disabled = true;
+                brailleTestBtn.textContent = 'Running Test...';
+                
+                try {
+                    // Switch to output phase to ensure proper display
+                    this.switchPhase(PHASE.OUTPUT);
+                    
+                    // Run the test
+                    await brailleTranslation.runAlphabetAndNumbersTest(
+                        this.elements.brailleDisplay,
+                        pattern => bleConnection.sendBraillePattern(pattern)
+                    );
+                    
+                    // Clear display when done
+                    setTimeout(() => {
+                        this.elements.brailleDisplay.innerHTML = '';
+                    }, 1000);
+                } catch (error) {
+                    console.error('Error running braille test:', error);
+                    this.log('Braille test error: ' + error.message, 'error');
+                } finally {
+                    // Re-enable button
+                    brailleTestBtn.disabled = false;
+                    brailleTestBtn.textContent = 'Test Braille Display';
+                    this.isRunningTest = false;
+                    
+                    // Return to recording phase
+                    setTimeout(() => {
+                        this.transitionToRecordingPhase();
+                    }, 2000);
+                }
+            });
+        }
+        
+        // Add handler for cache management
+        const clearCacheBtn = document.getElementById('clear-cache-btn');
+        if (clearCacheBtn) {
+            clearCacheBtn.addEventListener('click', () => {
+                if (brailleTranslation.clearCache()) {
+                    this.log('Braille database cache cleared', 'success');
+                    // Reload database
+                    brailleTranslation.initialize().then(success => {
+                        if (success) {
+                            this.log('Database reloaded successfully', 'success');
+                        } else {
+                            this.log('Failed to reload database', 'error');
+                        }
+                    });
+                } else {
+                    this.log('Failed to clear cache', 'error');
+                }
+            });
+        }
     }
 }
 
