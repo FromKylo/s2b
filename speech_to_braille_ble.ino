@@ -229,7 +229,7 @@ void processSingleCell(std::string cellStr, int cellIndex) {
   // Process the last token
   activateDotFromString(cellStr, dots);
   
-  // Activate the pins for this cell
+  // Activate the pins for this cell directly rather than using digitalWrite here
   Serial.print("Setting cell ");
   Serial.print(cellIndex);
   Serial.print(" dots: [");
@@ -239,6 +239,10 @@ void processSingleCell(std::string cellStr, int cellIndex) {
     if (i < NUM_PINS - 1) Serial.print(",");
   }
   Serial.println("]");
+  
+  // Only update tracking variables once per cell processing
+  outputActive = true;
+  lastOutputTime = millis();
 }
 
 /**
@@ -475,248 +479,251 @@ class SpeedTestCharacteristicCallbacks: public BLECharacteristicCallbacks {
         Serial.println(" bytes/second");
       }
     }
-  }
+  } for a specific cell or all cells
 };
-
+nt cellIndex = -1) {
 /**
- * Activate braille dots based on array inputs
+ * Activate braille dots based on array inputss()/1000.0, 3);
  */
 void activateDots(int dots[6]) {
-  // For now, we'll just set the first cell with the pattern
+  // For now, we'll just set the first cell with the patternecific cell or all cells with the same pattern
   Serial.print("[");
-  Serial.print(millis()/1000.0, 3);
+  Serial.print(millis()/1000.0, 3);lIndex + 1 : NUM_CELLS;
   Serial.print("s] Setting dots [");
-  for (int i = 0; i < NUM_PINS; i++) {
-    digitalWrite(braillePins[0][i], dots[i] ? HIGH : LOW);
-    Serial.print(dots[i] ? "1" : "0");
+  for (int i = 0; i < NUM_PINS; i++) {or (int cell = startCell; cell < endCell; cell++) {
+    digitalWrite(braillePins[0][i], dots[i] ? HIGH : LOW); ");
+    Serial.print(dots[i] ? "1" : "0");  Serial.print(cell);
     if (i < NUM_PINS - 1) Serial.print(",");
   }
-  Serial.println("]");
-  
+  Serial.println("]");PINS; i++) {
+  [cell][i], dots[i] ? HIGH : LOW);
   // Update tracking variables
-  outputActive = true;
-  lastOutputTime = millis();
-  currentPhase = PHASE_OUTPUT;
+  outputActive = true;     if (i < NUM_PINS - 1) Serial.print(",");
+  lastOutputTime = millis();    }
+  currentPhase = PHASE_OUTPUT; Serial.println("]");
   Serial.println("Braille dots activated");
 }
-
+/ Update tracking variables
 /**
- * Process binary braille array format
+ * Process binary braille array formatillis();
  * Only accepts the 2-byte format (phase byte + 6-bit dots byte)
- */
+ */activated");
 void processBrailleArray(const uint8_t* data, size_t length) {
   Serial.print("[");
   Serial.print(millis()/1000.0, 3);
-  Serial.print("s] Received ");
-  Serial.print(length);
+  Serial.print("s] Received ");le array format
+  Serial.print(length); byte + 6-bit dots byte)
   Serial.print(" bytes: ");
-  for (size_t i = 0; i < length; i++) {
-    Serial.print("0x");
-    if (data[i] < 16) Serial.print("0");
-    Serial.print(data[i], HEX);
+  for (size_t i = 0; i < length; i++) {ta, size_t length) {
+    Serial.print("0x");erial.print("[");
+    if (data[i] < 16) Serial.print("0");is()/1000.0, 3);
+    Serial.print(data[i], HEX);Serial.print("s] Received ");
     if (i < length - 1) Serial.print(" ");
-  }
-  Serial.println();
+  }es: ");
+  Serial.println();gth; i++) {
   
-  // Only accept 2-byte format: first byte is phase, second byte has dot states in bits
-  if (length == 2) {
+  // Only accept 2-byte format: first byte is phase, second byte has dot states in bits< 16) Serial.print("0");
+  if (length == 2) {Serial.print(data[i], HEX);
     uint8_t phase = data[0];
     uint8_t dotBits = data[1];
     int dots[6];
     
-    // Extract individual bits for each dot (bit 0 = dot 1, bit 1 = dot 2, etc.)
+    // Extract individual bits for each dot (bit 0 = dot 1, bit 1 = dot 2, etc.) Only accept 2-byte format: first byte is phase, second byte has dot states in bits
     for (int i = 0; i < 6; i++) {
-      dots[i] = (dotBits & (1 << i)) ? 1 : 0;
-    }
+      dots[i] = (dotBits & (1 << i)) ? 1 : 0;0];
+    }uint8_t dotBits = data[1];
     
     // Update phase if provided
-    currentPhase = phase;
+    currentPhase = phase;= dot 2, etc.)
     
-    // Activate dots
+    // Activate dots)) ? 1 : 0;
     Serial.print("Processing 2-byte format - Phase: ");
     Serial.print(phase == PHASE_OUTPUT ? "OUTPUT" : "NOT_OUTPUT");
-    Serial.print(", Packed bits: 0b");
-    for (int i = 5; i >= 0; i--) {
-      Serial.print((dotBits & (1 << i)) ? "1" : "0");
-    }
+    Serial.print(", Packed bits: 0b");f provided
+    for (int i = 5; i >= 0; i--) {e;
+      Serial.print((dotBits & (1 << i)) ? "1" : "0"); 
+    }ctivate dots - specify to use cell 0 only for binary format
     Serial.println();
     activateDots(dots);
   }
-  else {
-    Serial.print("Invalid data format length: ");
-    Serial.println(length);
+  else { Serial.print("Invalid data format length: ");
+    Serial.print("Invalid data format length: ");   Serial.println(length);
+    Serial.println(length);    Serial.println("Only 2-byte format (phase byte + 6-bit data byte) is supported");
     Serial.println("Only 2-byte format (phase byte + 6-bit data byte) is supported");
   }
 }
-
-void setup() {
-  // Initialize serial with higher baud rate for faster logging
+id setup() {
+void setup() {r logging
+  // Initialize serial with higher baud rate for faster logging(115200);
   Serial.begin(115200);
   
   // Wait for serial to connect for debugging purposes
   delay(1000);
   
-  Serial.println("\n\n=== Speech-to-Braille BLE Device ===");
+  Serial.println("\n\n=== Speech-to-Braille BLE Device ===");  Serial.println("Build version: " __DATE__ " " __TIME__);
   Serial.println("Build version: " __DATE__ " " __TIME__);
-  
+   Device with JSON Array Format");
   Serial.println("Starting Speech-to-Braille BLE Device with JSON Array Format");
-
-  // Initialize braille pins as outputs and set to LOW
-  for (int cell = 0; cell < NUM_CELLS; cell++) {
-    for (int i = 0; i < NUM_PINS; i++) {
-      pinMode(braillePins[cell][i], OUTPUT);
+set to LOW
+  // Initialize braille pins as outputs and set to LOW {
+  for (int cell = 0; cell < NUM_CELLS; cell++) {or (int i = 0; i < NUM_PINS; i++) {
+    for (int i = 0; i < NUM_PINS; i++) {   pinMode(braillePins[cell][i], OUTPUT);
+      pinMode(braillePins[cell][i], OUTPUT);      digitalWrite(braillePins[cell][i], LOW);
       digitalWrite(braillePins[cell][i], LOW);
     }
   }
-
   // Initialize LED pin as output and set to LOW
+  // Initialize LED pin as output and set to LOWOUTPUT);
   pinMode(STATUS_LED_PIN, OUTPUT);
   digitalWrite(STATUS_LED_PIN, LOW);
 
   // Initialize BLE device
   BLEDevice::init("Braille Display");
-  
-  // Create BLE server and set callbacks
+    // Create BLE server and set callbacks
+  // Create BLE server and set callbackscreateServer();
   pServer = BLEDevice::createServer();
   pServer->setCallbacks(new ServerCallbacks());
 
-  // Create BLE service
+  // Create BLE serviceILLE_SERVICE_UUID);
   BLEService* pService = pServer->createService(BRAILLE_SERVICE_UUID);
-
-  // Create BLE characteristic with explicit properties
+plicit properties
+  // Create BLE characteristic with explicit propertiesracteristic(
   pCharacteristic = pService->createCharacteristic(
     BRAILLE_CHARACTERISTIC_UUID,
     BLECharacteristic::PROPERTY_READ |
-    BLECharacteristic::PROPERTY_WRITE |
-    BLECharacteristic::PROPERTY_WRITE_NR |  // Add write without response property
-    BLECharacteristic::PROPERTY_NOTIFY |
+    BLECharacteristic::PROPERTY_WRITE |BLECharacteristic::PROPERTY_WRITE_NR |  // Add write without response property
+    BLECharacteristic::PROPERTY_WRITE_NR |  // Add write without response property  BLECharacteristic::PROPERTY_NOTIFY |
+    BLECharacteristic::PROPERTY_NOTIFY |ATE
     BLECharacteristic::PROPERTY_INDICATE
   );
   
-  // Set callbacks for characteristic
-  pCharacteristic->setCallbacks(new CharacteristicCallbacks());
+  // Set callbacks for characteristicicCallbacks());
+  pCharacteristic->setCallbacks(new CharacteristicCallbacks());  
   
   // Add client characteristic descriptor
   pCharacteristic->addDescriptor(new BLE2902());
-
-  // Create BLE speed test characteristic
-  pSpeedTestCharacteristic = pService->createCharacteristic(
+stic
+  // Create BLE speed test characteristicpeedTestCharacteristic = pService->createCharacteristic(
+  pSpeedTestCharacteristic = pService->createCharacteristic(  SPEED_TEST_CHARACTERISTIC_UUID,
     SPEED_TEST_CHARACTERISTIC_UUID,
     BLECharacteristic::PROPERTY_WRITE
-  );
-  
-  // Set callbacks for speed test characteristic
+  );  
+   speed test characteristic
+  // Set callbacks for speed test characteristicristic->setCallbacks(new SpeedTestCharacteristicCallbacks());
   pSpeedTestCharacteristic->setCallbacks(new SpeedTestCharacteristicCallbacks());
 
   // Start the service
   pService->start();
 
   // Start advertising
-  BLEAdvertising* pAdvertising = BLEDevice::getAdvertising();
-  pAdvertising->addServiceUUID(BRAILLE_SERVICE_UUID);
-  pAdvertising->setScanResponse(true);
-  pAdvertising->setMinPreferred(0x06);  // helps with iPhone connections issue
+  BLEAdvertising* pAdvertising = BLEDevice::getAdvertising();_SERVICE_UUID);
+  pAdvertising->addServiceUUID(BRAILLE_SERVICE_UUID);true);
+  pAdvertising->setScanResponse(true);pAdvertising->setMinPreferred(0x06);  // helps with iPhone connections issue
+  pAdvertising->setMinPreferred(0x06);  // helps with iPhone connections issueerred(0x12);
   pAdvertising->setMinPreferred(0x12);
   BLEDevice::startAdvertising();
   
-  // Add debugging outputs
-  Serial.println("Braille pins configured:");
+  // Add debugging outputsle pins configured:");
+  Serial.println("Braille pins configured:");UM_CELLS; cell++) {
   for (int cell = 0; cell < NUM_CELLS; cell++) {
     Serial.print("  Cell ");
     Serial.print(cell);
-    Serial.print(": Pins [");
-    for (int pin = 0; pin < NUM_PINS; pin++) {
-      Serial.print(braillePins[cell][pin]);
-      if (pin < NUM_PINS - 1) Serial.print(", ");
+    Serial.print(": Pins [");or (int pin = 0; pin < NUM_PINS; pin++) {
+    for (int pin = 0; pin < NUM_PINS; pin++) {lePins[cell][pin]);
+      Serial.print(braillePins[cell][pin]);   if (pin < NUM_PINS - 1) Serial.print(", ");
+      if (pin < NUM_PINS - 1) Serial.print(", ");  }
     }
-    Serial.println("]");
+    Serial.println("]");}
   }
-  
+  ady. Waiting for connections...");
   Serial.println("BLE server ready. Waiting for connections...");
-  
+  icator that setup is complete
   // Visual indicator that setup is complete
-  for (int i = 0; i < 5; i++) {
-    digitalWrite(STATUS_LED_PIN, HIGH);
-    delay(100);
-    digitalWrite(STATUS_LED_PIN, LOW);
+  for (int i = 0; i < 5; i++) {e(STATUS_LED_PIN, HIGH);
+    digitalWrite(STATUS_LED_PIN, HIGH); delay(100);
+    delay(100);   digitalWrite(STATUS_LED_PIN, LOW);
+    digitalWrite(STATUS_LED_PIN, LOW);    delay(100);
     delay(100);
   }
 }
 
 void loop() {
   // Disconnection handling
-  if (!deviceConnected && oldDeviceConnected) {
-    delay(500); // Give the Bluetooth stack time to get ready
-    pServer->startAdvertising(); // Restart advertising
-    Serial.println("Restarting BLE advertising");
+  if (!deviceConnected && oldDeviceConnected) {ck time to get ready
+    delay(500); // Give the Bluetooth stack time to get ready pServer->startAdvertising(); // Restart advertising
+    pServer->startAdvertising(); // Restart advertising  Serial.println("Restarting BLE advertising");
+    Serial.println("Restarting BLE advertising"); deviceConnected;
     oldDeviceConnected = deviceConnected;
   }
   
-  // Connection handling
-  if (deviceConnected && !oldDeviceConnected) {
+  // Connection handlingf (deviceConnected && !oldDeviceConnected) {
+  if (deviceConnected && !oldDeviceConnected) {  Serial.println("Device connected - ready to receive braille data");
     Serial.println("Device connected - ready to receive braille data");
     oldDeviceConnected = deviceConnected;
   }
-  
+   all braille pins
   // Sequential pin activation when not connected - loop through all braille pins
-  if (!deviceConnected) {
-    unsigned long currentTime = millis();
-    if (currentTime - lastHeartbeatTime >= HEARTBEAT_INTERVAL) {
-      // Calculate which pin to activate based on sequence
+  if (!deviceConnected) {= millis();
+    unsigned long currentTime = millis();HEARTBEAT_INTERVAL) {
+    if (currentTime - lastHeartbeatTime >= HEARTBEAT_INTERVAL) {// Calculate which pin to activate based on sequence
+      // Calculate which pin to activate based on sequence= 0;
       static int sequence = 0;
       int totalPins = NUM_CELLS * NUM_PINS;
       
-      // Turn off all pins
-      for (int cell = 0; cell < NUM_CELLS; cell++) {
-        for (int pin = 0; pin < NUM_PINS; pin++) {
+      // Turn off all pins (int cell = 0; cell < NUM_CELLS; cell++) {
+      for (int cell = 0; cell < NUM_CELLS; cell++) { for (int pin = 0; pin < NUM_PINS; pin++) {
+        for (int pin = 0; pin < NUM_PINS; pin++) {    digitalWrite(braillePins[cell][pin], LOW);
           digitalWrite(braillePins[cell][pin], LOW);
         }
       }
-      
       // Calculate which pin to light up
+      // Calculate which pin to light up / NUM_PINS;
       int cellIndex = sequence / NUM_PINS;
       int pinIndex = sequence % NUM_PINS;
       
-      // Turn on just this pin
+      // Turn on just this pinnIndex], HIGH);
       digitalWrite(braillePins[cellIndex][pinIndex], HIGH);
-      
-      // Move to next in sequence
+      nce
+      // Move to next in sequence+ 1) % totalPins;
       sequence = (sequence + 1) % totalPins;
-      
       // Toggle the status LED
-      ledState = !ledState;
-      digitalWrite(STATUS_LED_PIN, ledState ? HIGH : LOW);
-      
+      // Toggle the status LED
+      ledState = !ledState; digitalWrite(STATUS_LED_PIN, ledState ? HIGH : LOW);
+      digitalWrite(STATUS_LED_PIN, ledState ? HIGH : LOW);   
+          lastHeartbeatTime = currentTime;
       lastHeartbeatTime = currentTime;
     }
   }
-  
-  // Auto-reset braille output if no new data received within timeout
-  if (outputActive && (millis() - lastOutputTime >= OUTPUT_TIMEOUT)) {
+  e output if no new data received within timeout
+  // Auto-reset braille output if no new data received within timeouttOutputTime >= OUTPUT_TIMEOUT)) {
+  if (outputActive && (millis() - lastOutputTime >= OUTPUT_TIMEOUT)) {utputTime;
     unsigned long idleTime = millis() - lastOutputTime;
     Serial.print("[");
-    Serial.print(millis()/1000.0, 3);
-    Serial.print("s] Output timeout after ");
-    Serial.print(idleTime);
-    Serial.println("ms - lowering all dots");
+    Serial.print(millis()/1000.0, 3);ut timeout after ");
+    Serial.print("s] Output timeout after ");leTime);
+    Serial.print(idleTime); Serial.println("ms - lowering all dots");
+    Serial.println("ms - lowering all dots");  outputActive = false;
     outputActive = false;
     lowerAllDots();
   }
   
-  // Speed test timeout handling
-  if (speedTestActive && (millis() - lastPacketTime >= SPEED_TEST_TIMEOUT)) {
-    unsigned long testDuration = millis() - testStartTime;
-    float speed = (totalBytesReceived * 1000.0) / testDuration; // bytes per second
-    Serial.print("Speed test completed: ");
-    Serial.print(totalBytesReceived);
+  // Speed test timeout handlingcketTime >= SPEED_TEST_TIMEOUT)) {
+  if (speedTestActive && (millis() - lastPacketTime >= SPEED_TEST_TIMEOUT)) {is() - testStartTime;
+    unsigned long testDuration = millis() - testStartTime;ceived * 1000.0) / testDuration; // bytes per second
+    float speed = (totalBytesReceived * 1000.0) / testDuration; // bytes per secondmpleted: ");
+    Serial.print("Speed test completed: ");ed);
+    Serial.print(totalBytesReceived); in ");
     Serial.print(" bytes in ");
-    Serial.print(testDuration);
-    Serial.print(" ms, Speed: ");
-    Serial.print(speed);
+    Serial.print(testDuration);: ");
+    Serial.print(" ms, Speed: "); Serial.print(speed);
+    Serial.print(speed);  Serial.println(" bytes/second");
     Serial.println(" bytes/second");
     speedTestActive = false;
-  }
-  
-  // Brief delay in the loop
+  } 
+
+
+
+
+}  delay(100);  // Brief delay in the loop    // Brief delay in the loop
   delay(100);
 }

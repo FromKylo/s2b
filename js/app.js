@@ -22,8 +22,13 @@ class SpeechToBrailleApp {
             'Philippine': 'fil-PH'
         };
         
-        // Initialize sound preference
-        window.soundEnabled = localStorage.getItem('soundEnabled') !== 'false';
+        // Sound is always enabled - no longer using the toggle
+        window.soundEnabled = true;
+        localStorage.setItem('soundEnabled', 'true');
+        
+        // Initialize permission flags
+        this.micPermissionGranted = false;
+        this.ttsPermissionTested = false;
     }
     
     /**
@@ -86,6 +91,11 @@ class SpeechToBrailleApp {
             statusText.textContent = message;
         }
         
+        // Speak the status message for important states
+        if (status === 'error' || status === 'success') {
+            this.speechRecognizer.speak(message);
+        }
+        
         // For success messages, auto-hide after 5 seconds
         if (autoHide) {
             setTimeout(() => {
@@ -141,6 +151,9 @@ class SpeechToBrailleApp {
     startIntroPhaseWithCountdown() {
         this.showIntroPhase();
         
+        // Update permission status displays
+        this.checkPermissionStatuses();
+        
         // Create countdown elements if they don't exist
         if (!document.getElementById('intro-countdown-container')) {
             const countdownContainer = document.createElement('div');
@@ -188,8 +201,159 @@ class SpeechToBrailleApp {
         
         // Read welcome message using TTS
         setTimeout(() => {
-            this.speechRecognizer.speak("Welcome to Speech to Braille. Start speaking when recording begins.");
+            this.speechRecognizer.speak(
+                "Welcome to Speech to Braille. This app converts your spoken words into braille patterns. " +
+                "Please enable microphone access and test the voice output before starting.", 
+                true // Priority message
+            );
         }, 500);
+    }
+    
+    /**
+     * Check current permission status
+     */
+    checkPermissionStatuses() {
+        // Check if mic permission is already granted
+        navigator.permissions.query({name: 'microphone'}).then(result => {
+            if (result.state === 'granted') {
+                this.updateMicPermissionStatus(true);
+            }
+        }).catch(err => {
+            // Some browsers don't support permissions API for microphone
+            logDebug('Error checking microphone permission: ' + err.message);
+        });
+        
+        // Check if TTS was previously tested
+        if (localStorage.getItem('ttsTested') === 'true') {
+            this.updateTTSPermissionStatus(true);
+        }
+        
+        // Update start button status
+        this.updateStartButtonStatus();
+    }
+    
+    /**
+     * Update microphone permission status
+     */
+    updateMicPermissionStatus(granted) {
+        const micStatus = document.getElementById('mic-status');
+        const enableMicBtn = document.getElementById('enable-mic-btn');
+        
+        this.micPermissionGranted = granted;
+        
+        if (granted) {
+            micStatus.textContent = 'Enabled';
+            micStatus.classList.add('enabled');
+            enableMicBtn.textContent = 'Microphone Enabled';
+            enableMicBtn.disabled = true;
+        } else {
+            micStatus.textContent = 'Not enabled';
+            micStatus.classList.remove('enabled');
+            enableMicBtn.textContent = 'Enable Microphone';
+            enableMicBtn.disabled = false;
+        }
+        
+        this.updateStartButtonStatus();
+    }
+    
+    /**
+     * Update TTS permission status
+     */
+    updateTTSPermissionStatus(tested) {
+        const ttsStatus = document.getElementById('tts-status');
+        const testTTSBtn = document.getElementById('test-tts-btn');
+        
+        this.ttsPermissionTested = tested;
+        
+        if (tested) {
+            ttsStatus.textContent = 'Voice Enabled';
+            ttsStatus.classList.add('enabled');
+            testTTSBtn.textContent = 'Test Again';
+            
+            // Remember TTS was tested
+            localStorage.setItem('ttsTested', 'true');
+        } else {
+            ttsStatus.textContent = 'Not tested';
+            ttsStatus.classList.remove('enabled');
+            testTTSBtn.textContent = 'Test Voice';
+        }
+        
+        this.updateStartButtonStatus();
+    }
+    
+    /**
+     * Update start button status based on permissions
+     */
+    updateStartButtonStatus() {
+        const startBtn = document.getElementById('start-btn');
+        
+        if (this.micPermissionGranted && this.ttsPermissionTested) {
+            startBtn.disabled = false;
+        } else {
+            startBtn.disabled = true;
+        }
+    }
+    
+    /**
+     * Request microphone permission
+     */
+    requestMicrophonePermission() {
+        // Try to start audio context to gain microphone access
+        logDebug('Requesting microphone permission...');
+        
+        navigator.mediaDevices.getUserMedia({ audio: true })
+            .then(stream => {
+                logDebug('Microphone permission granted');
+                // Stop the tracks right away, we don't need them yet
+                stream.getTracks().forEach(track => track.stop());
+                
+                // Update UI
+                this.updateMicPermissionStatus(true);
+                
+                // Speak confirmation
+                this.speechRecognizer.speak('Microphone access enabled. Thank you.', true);
+            })
+            .catch(err => {
+                logDebug('Microphone permission denied: ' + err.message);
+                alert('Microphone access is required for speech recognition. Please enable it and try again.');
+                this.updateMicPermissionStatus(false);
+            });
+    }
+    
+    /**
+     * Test TTS functionality
+     */
+    testTTSVoice() {
+        logDebug('Testing Text-to-Speech...');
+        
+        // Speak a test message
+        const utterance = this.speechRecognizer.speak(
+            'This is a test of the text-to-speech system. Voice feedback is now enabled.',
+            true
+        );
+        
+        if (utterance) {
+            // Listen for the end of speech to confirm it worked
+            utterance.onend = () => {
+                logDebug('TTS test completed successfully');
+                this.updateTTSPermissionStatus(true);
+            };
+            
+            // If speech doesn't end in a reasonable time, assume it worked anyway
+            // (some browsers don't fire onend event reliably)
+            setTimeout(() => {
+                if (!this.ttsPermissionTested) {
+                    logDebug('TTS test timeout - assuming success');
+                    this.updateTTSPermissionStatus(true);
+                }
+            }, 3000);
+        } else {
+            // If utterance is null, TTS is not supported
+            logDebug('TTS not supported in this browser');
+            alert('Text-to-speech may not be fully supported in your browser. Some features may be limited.');
+            // Mark as tested anyway so user can proceed
+            this.updateTTSPermissionStatus(true);
+        }
     }
     
     /**
@@ -204,6 +368,16 @@ class SpeechToBrailleApp {
         // Add BLE test button handler
         document.getElementById('ble-test').addEventListener('click', () => {
             this.testBleTransmission();
+            this.speechRecognizer.speak("Testing BLE connection");
+        });
+        
+        // Permission buttons in intro phase
+        document.getElementById('enable-mic-btn').addEventListener('click', () => {
+            this.requestMicrophonePermission();
+        });
+        
+        document.getElementById('test-tts-btn').addEventListener('click', () => {
+            this.testTTSVoice();
         });
         
         // Phase navigation
@@ -222,6 +396,7 @@ class SpeechToBrailleApp {
         
         document.getElementById('clear-btn').addEventListener('click', () => {
             this.speechRecognizer.clear();
+            this.speechRecognizer.speak("Speech recognition cleared");
             // Return to recording phase if we were in output phase
             if (this.currentPhase === 'output') {
                 this.showRecordingPhase();
@@ -243,6 +418,7 @@ class SpeechToBrailleApp {
                 clearInterval(this.outputTimer);
                 this.outputTimer = null;
             }
+            this.speechRecognizer.speak("Restarting the application");
             this.startIntroPhaseWithCountdown();
         });
         
@@ -271,32 +447,23 @@ class SpeechToBrailleApp {
             });
         }
         
-        // Sound toggle
-        const soundToggle = document.getElementById('sound-toggle');
-        if (soundToggle) {
-            // Set initial state based on preference
-            soundToggle.checked = window.soundEnabled;
-            
-            soundToggle.addEventListener('change', (e) => {
-                window.soundEnabled = e.target.checked;
-                localStorage.setItem('soundEnabled', window.soundEnabled);
-                logDebug(`Sound ${window.soundEnabled ? 'enabled' : 'disabled'}`);
-                
-                // Play a test sound if enabled
-                if (window.soundEnabled) {
-                    playAudioCue('intro');
-                }
-            });
-        }
-        
-        // Debug console tools
+        // Debug console tools - improved toggle handling
         document.getElementById('debug-toggle').addEventListener('click', () => {
-            this.toggleDebugConsole();
+            const debugConsole = document.getElementById('debug-console');
+            debugConsole.classList.toggle('hidden');
+            
+            // Log debug console activation
+            logDebug('Debug console toggled');
         });
         
         // Add debug layout test button listener
         document.getElementById('debug-test-braille').addEventListener('click', () => {
             this.testBrailleLayout();
+        });
+        
+        // Clear debug output
+        document.getElementById('clear-debug-btn').addEventListener('click', () => {
+            document.getElementById('debug-output').innerHTML = '';
         });
     }
     
@@ -342,9 +509,13 @@ class SpeechToBrailleApp {
         try {
             await this.bleConnection.connect();
             playAudioCue('connection');
+            // Speak connection success
+            this.speechRecognizer.speak("Braille display connected successfully");
         } catch (error) {
             logDebug(`Failed to connect: ${error.message}`);
             alert('Failed to connect to Braille Display: ' + error.message);
+            // Speak connection failure
+            this.speechRecognizer.speak("Failed to connect to braille display. Please try again.");
         }
     }
     
@@ -381,6 +552,9 @@ class SpeechToBrailleApp {
         this.currentPhase = 'recording';
         this.updatePhaseDisplay();
         playAudioCue('recording');
+        
+        // Remove the "Ready to listen" announcement
+        
         this.startRecording();
         logDebug('Switched to recording phase');
         
@@ -401,6 +575,9 @@ class SpeechToBrailleApp {
         
         // Add output countdown timer
         this.startOutputCountdown();
+        
+        // Announce transition to output phase
+        this.speechRecognizer.speak("Showing braille pattern", false);
         
         logDebug('Switched to output phase');
     }
@@ -447,6 +624,8 @@ class SpeechToBrailleApp {
         this.outputTimer = setInterval(() => {
             secondsRemaining--;
             countdownValue.textContent = secondsRemaining;
+            
+            // Remove the "Returning to listening mode" announcement
             
             if (secondsRemaining <= 0) {
                 clearInterval(this.outputTimer);
@@ -517,8 +696,10 @@ class SpeechToBrailleApp {
                 // Render braille cells
                 this.brailleCellRenderer.renderBrailleCells(JSON.stringify(translation.array));
                 
-                // Speak the matched word
-                this.speechRecognizer.speak(word);
+                // Speak the recognized word with its language
+                const langName = translation.language === 'UEB' ? 'English' : 
+                                (translation.language === 'Philippine' ? 'Filipino' : translation.language);
+                this.speechRecognizer.speak(`"${word}" in ${langName} braille`, true);
                 
                 // Send to BLE device if connected
                 if (this.bleConnection.isConnected()) {
@@ -538,6 +719,8 @@ class SpeechToBrailleApp {
                     wordDisplay.classList.add('no-match');
                     this.brailleCellRenderer.clear();
                     
+                    // Remove the "No braille pattern found" announcement
+                    
                     // Switch to output phase to show the no-match state
                     this.showOutputPhase();
                 }
@@ -552,6 +735,7 @@ class SpeechToBrailleApp {
         this.showOutputPhase();
         document.getElementById('recognized-word').textContent = 'Testing Braille Patterns...';
         this.brailleCellRenderer.renderAlphabetTest();
+        this.speechRecognizer.speak("Testing braille patterns. Displaying alphabet in braille.");
     }
     
     /**
@@ -561,10 +745,12 @@ class SpeechToBrailleApp {
         if (!this.bleConnection.isConnected()) {
             logDebug('Cannot test: Not connected to BLE device');
             alert('Please connect to the BLE device first');
+            this.speechRecognizer.speak("Please connect to the BLE device first");
             return;
         }
         
         logDebug('Running BLE transmission test...');
+        this.speechRecognizer.speak("Testing Bluetooth connection to braille display");
         
         // Test a simple dot pattern (dots 1,3,5)
         const testPattern = "[[1,3,5]]";
@@ -599,6 +785,7 @@ class SpeechToBrailleApp {
         document.getElementById('recognized-word').textContent = "Position Test";
         
         this.showOutputPhase();
+        this.speechRecognizer.speak("Testing braille dot positions");
         
         // Show dots in sequence
         const positions = [];
@@ -616,11 +803,13 @@ class SpeechToBrailleApp {
                 clearInterval(testInterval);
                 // Show all dots again at the end
                 this.brailleCellRenderer.renderBrailleCells(JSON.stringify([[1,2,3,4,5,6]]));
+                this.speechRecognizer.speak("Braille layout test complete");
                 return;
             }
             
             document.getElementById('recognized-word').textContent = `Position ${currentTest}`;
             this.brailleCellRenderer.renderBrailleCells(JSON.stringify([[currentTest]]));
+            this.speechRecognizer.speak(`Testing dot position ${currentTest}`);
             currentTest++;
         }, 1000);
     }
@@ -679,33 +868,19 @@ document.addEventListener('DOMContentLoaded', async () => {
  * Play audio cue for different phases
  */
 function playAudioCue(type) {
-    // Check if sounds are enabled
-    if (!window.soundEnabled) {
-        return;
-    }
-    
-    // Check if audio is supported
-    if (!window.AudioContext && !window.webkitAudioContext) {
-        logDebug('Web Audio API not supported in this browser');
-        return;
-    }
+    if (!window.soundEnabled) return;
     
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
-    
     oscillator.connect(gainNode);
     gainNode.connect(audioContext.destination);
     
-    if (type === 'recording') {
-        oscillator.type = 'sine';
-        oscillator.frequency.value = 440; // A4 note
-        gainNode.gain.value = 0.1;
-        oscillator.start();
-        setTimeout(() => {
-            oscillator.stop();
-        }, 200);
-    } else if (type === 'no-match') {
+    // If app hasn't been initialized yet, return without attempting TTS
+    const app = window.app;
+    
+    if (type === 'no-match') {
+        // Error sound - falling tone
         oscillator.type = 'triangle';
         oscillator.frequency.value = 220; // A3 note
         gainNode.gain.value = 0.1;
@@ -733,22 +908,61 @@ function playAudioCue(type) {
         gainNode.gain.value = 0.1;
         oscillator.start();
         
-        // Gradually change frequency for a welcoming effect
-        oscillator.frequency.linearRampToValueAtTime(783.99, audioContext.currentTime + 0.3); // G5
+        // Frequency ramp up
+        oscillator.frequency.linearRampToValueAtTime(783.99, audioContext.currentTime + 0.2); // G5 note
+        
         setTimeout(() => {
             oscillator.stop();
         }, 400);
-    } else if (type === 'connection') {
-        // Successful connection sound
+    } else if (type === 'recording') {
+        // Recording start sound - rising tone
         oscillator.type = 'sine';
-        oscillator.frequency.value = 587.33; // D5
+        oscillator.frequency.value = 440; // A4 note
         gainNode.gain.value = 0.1;
-        
         oscillator.start();
+        
+        // Frequency ramp up
+        oscillator.frequency.linearRampToValueAtTime(587.33, audioContext.currentTime + 0.15); // D5 note
+        
         setTimeout(() => {
             oscillator.stop();
+        }, 300);
+    } else if (type === 'output') {
+        // Output sound - success chime
+        oscillator.type = 'sine';
+        oscillator.frequency.value = 783.99; // G5
+        gainNode.gain.value = 0.1;
+        oscillator.start();
+        
+        setTimeout(() => {
+            oscillator.stop();
+        }, 200);
+        
+        // Play a second tone after a short delay
+        setTimeout(() => {
+            const secondOscillator = audioContext.createOscillator();
+            secondOscillator.connect(gainNode);
+            secondOscillator.type = 'sine';
+            secondOscillator.frequency.value = 1046.50; // C6
             
-            // Play a second higher tone
+            secondOscillator.start();
+            setTimeout(() => {
+                secondOscillator.stop();
+            }, 300);
+        }, 200);
+    } else if (type === 'connection') {
+        // Connection sound - two ascending tones
+        oscillator.type = 'sine';
+        oscillator.frequency.value = 440; // A4
+        gainNode.gain.value = 0.1;
+        oscillator.start();
+        
+        setTimeout(() => {
+            oscillator.stop();
+        }, 100);
+        
+        // Play a second higher tone after a short delay
+        setTimeout(() => {
             const secondOscillator = audioContext.createOscillator();
             secondOscillator.connect(gainNode);
             secondOscillator.type = 'sine';
@@ -758,6 +972,6 @@ function playAudioCue(type) {
             setTimeout(() => {
                 secondOscillator.stop();
             }, 200);
-        }, 150);
+        }, 100);
     }
 }

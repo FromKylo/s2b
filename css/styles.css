@@ -253,7 +253,7 @@ main {
     padding: 10px;
 }
 
-/* Position braille dots correctly in the grid */
+/* Position braille dots in the grid */
 .braille-dot[data-position="1"] { grid-area: 1 / 1; }
 .braille-dot[data-position="2"] { grid-area: 2 / 1; }
 .braille-dot[data-position="3"] { grid-area: 3 / 1; }
@@ -426,11 +426,26 @@ footer {
 /* Footer Controls */
 .footer-controls {
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
     align-items: center;
     padding: 0.5rem 1rem;
     background-color: #212121;
     color: white;
+}
+
+/* Debug button - improved styling for better access */
+.debug-button {
+    padding: 10px 20px;
+    background-color: #444;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    text-align: center;
+    font-weight: bold;
+}
+
+.debug-button:hover {
+    background-color: #666;
 }
 
 /* Toggle Switch */
@@ -608,4 +623,43 @@ footer {
 .word-recognition-indicator.active {
     background-color: #4CAF50;
     box-shadow: 0 0 10px #4CAF50;
+}
+
+/* Permission Items in Intro Phase */
+.permission-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin: 1.5rem 0;
+    width: 100%;
+}
+
+.permission-item {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: var(--border-radius);
+    padding: 1rem;
+    border-left: 4px solid var(--secondary-color);
+}
+
+.permission-item h3 {
+    margin-top: 0;
+    font-size: 1.2rem;
+}
+
+.btn-permission {
+    background-color: var(--secondary-color);
+    margin-right: 1rem;
+}
+
+.permission-status {
+    display: inline-block;
+    font-size: 0.9rem;
+    padding: 0.3rem 0.6rem;
+    border-radius: 1rem;
+    background-color: var(--warning-color);
+    color: white;
+}
+
+.permission-status.enabled {
+    background-color: var(--success-color);
 }

@@ -17,9 +17,38 @@ class SpeechRecognizer {
         this.visualizerAnimationFrame = null;
         this.recognitionTimeout = null;
         this.isAndroid = /Android/i.test(navigator.userAgent);
+        this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         this.processingWord = false; // Prevent rapid processing of the same word
         this.lastProcessedWord = '';
         this.processingTimeout = null;
+        this.currentLanguage = 'en-US'; // Default language
+        this.restartCount = 0;
+        this.maxRestarts = 5;
+
+        // Feature detection
+        this.isSpeechRecognitionSupported = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
+        this.isSpeechSynthesisSupported = 'speechSynthesis' in window;
+        
+        // If speech synthesis is supported, load voices when they change
+        if (this.isSpeechSynthesisSupported) {
+            window.speechSynthesis.onvoiceschanged = () => {
+                this.voices = window.speechSynthesis.getVoices();
+                logDebug(`Loaded ${this.voices.length} voices for speech synthesis`);
+            };
+            
+            // Initial voice loading
+            this.voices = window.speechSynthesis.getVoices();
+            
+            // Fix for mobile TTS - ensure speech synthesis doesn't get cut off
+            if (this.isMobile) {
+                setInterval(() => {
+                    if (window.speechSynthesis.speaking) {
+                        window.speechSynthesis.pause();
+                        window.speechSynthesis.resume();
+                    }
+                }, 10000); // Keep synthesis alive every 10 seconds
+            }
+        }
     }
     
     /**
@@ -31,31 +60,77 @@ class SpeechRecognizer {
             return false;
         }
         
-        // Create recognition instance
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        this.recognition = new SpeechRecognition();
-        
-        // Configure recognition options
-        this.recognition.continuous = true;
-        this.recognition.interimResults = true;
-        
-        // Use a more global language setting to handle both English and Filipino
-        // This allows the browser to attempt to recognize either language
-        if (this.isAndroid) {
-            // On Android, better to use a specific language as fallback
-            this.recognition.lang = 'en-US';
-            logDebug('Using en-US for Android');
-        } else {
-            // On desktop, we can try to be more flexible
-            this.recognition.lang = 'en-US'; // Default to English but will try to detect
+        try {
+            // Create recognition instance
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            this.recognition = new SpeechRecognition();
+            
+            // Configure recognition options
+            this.recognition.continuous = true;
+            this.recognition.interimResults = true;
+            
+            // Set language based on current state
+            this.recognition.lang = this.currentLanguage;
+            
+            // Set up recognition event handlers
+            this.recognition.onresult = (event) => this.handleRecognitionResult(event);
+            this.recognition.onerror = (event) => this.handleRecognitionError(event);
+            this.recognition.onend = () => this.handleRecognitionEnd();
+            this.recognition.onstart = () => {
+                logDebug('Recognition officially started');
+                // For Android, try to "warm up" the recognition engine by starting audio
+                if (this.isAndroid) {
+                    this.startAudioVisualization();
+                }
+            };
+            
+            // Fix for Android permission issues - pre-request microphone permission
+            if (this.isAndroid && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({ audio: true })
+                    .then(stream => {
+                        logDebug('Microphone permission pre-granted for Android');
+                        // Just get the permission, don't need to keep the stream
+                        stream.getTracks().forEach(track => track.stop());
+                    })
+                    .catch(err => {
+                        logDebug('Microphone pre-permission failed: ' + err.message);
+                    });
+            }
+            
+            logDebug('Speech recognition initialized');
+            return true;
+        } catch (error) {
+            logDebug('Error initializing speech recognition: ' + error.message);
+            return false;
         }
+    }
+    
+    /**
+     * Set language for recognition
+     */
+    setLanguage(language) {
+        // Map common language formats
+        const langMap = {
+            'en': 'en-US',
+            'fil': 'fil-PH',
+            'tl': 'fil-PH'  // Tagalog variant
+        };
         
-        // Set up recognition event handlers
-        this.recognition.onresult = (event) => this.handleRecognitionResult(event);
-        this.recognition.onerror = (event) => this.handleRecognitionError(event);
-        this.recognition.onend = () => this.handleRecognitionEnd();
+        const langCode = langMap[language] || language;
+        this.currentLanguage = langCode;
         
-        logDebug('Speech recognition initialized');
+        if (this.recognition) {
+            this.recognition.lang = langCode;
+            logDebug(`Speech recognition language set to: ${langCode}`);
+            
+            // For Android, need to restart recognition with new language
+            if (this.isRecognizing && this.isAndroid) {
+                this.stop();
+                setTimeout(() => {
+                    this.start(this.onResultCallback, this.onEndCallback);
+                }, 500);
+            }
+        }
         return true;
     }
     
@@ -73,39 +148,34 @@ class SpeechRecognizer {
         this.onEndCallback = onEndCallback;
         this.interimResult = '';
         this.finalResult = '';
+        this.restartCount = 0;
         
         try {
-            this.recognition.start();
-            this.isRecognizing = true;
-            logDebug('Speech recognition started');
+            // For iOS, ensure audio context is resumed after user interaction
+            if (this.isMobile && window.AudioContext) {
+                const tempContext = new (window.AudioContext || window.webkitAudioContext)();
+                tempContext.resume().then(() => {
+                    tempContext.close();
+                    logDebug('Audio context resumed for mobile');
+                });
+            }
             
             // Clear any existing timeout
             if (this.recognitionTimeout) {
                 clearTimeout(this.recognitionTimeout);
             }
             
-            // On Android, recognition often stops after a while, so restart it periodically
-            if (this.isAndroid) {
-                this.recognitionTimeout = setTimeout(() => {
-                    logDebug('Android recognition timeout - restarting');
-                    if (this.isRecognizing) {
-                        try {
-                            this.recognition.stop();
-                            setTimeout(() => {
-                                if (this.isRecognizing) {
-                                    this.recognition.start();
-                                    logDebug('Recognition restarted');
-                                }
-                            }, 300);
-                        } catch (error) {
-                            logDebug('Error in timeout restart: ' + error.message);
-                        }
-                    }
-                }, 8000); // 8 seconds timeout
-            }
+            // Start recognition
+            this.recognition.start();
+            this.isRecognizing = true;
+            logDebug('Speech recognition started');
             
-            // Start audio visualization
-            this.startAudioVisualization();
+            // On Android/mobile, recognition often stops after a while, so restart it periodically
+            if (this.isMobile) {
+                this.recognitionTimeout = setTimeout(() => {
+                    this.setupAutoRestart();
+                }, 5000); // Check every 5 seconds for mobile devices
+            }
             
             // Update UI to show recording state
             this.updateVisualizerState(true);
@@ -113,7 +183,64 @@ class SpeechRecognizer {
             return true;
         } catch (error) {
             logDebug('Error starting speech recognition: ' + error.message);
+            // Try to recover from common errors
+            if (error.name === 'NotAllowedError') {
+                alert('Please enable microphone access to use speech recognition');
+            } else {
+                // Try reinitializing and starting again after a short delay
+                setTimeout(() => {
+                    this.recognition = null;
+                    this.initialize();
+                    this.start(onResultCallback, onEndCallback);
+                }, 1000);
+            }
             return false;
+        }
+    }
+    
+    /**
+     * Set up automatic restart for mobile devices
+     */
+    setupAutoRestart() {
+        if (!this.isRecognizing || this.restartCount >= this.maxRestarts) return;
+        
+        logDebug(`Mobile recognition check - attempt ${this.restartCount + 1}`);
+        
+        try {
+            // Only restart if we're still supposed to be recognizing
+            if (this.isRecognizing) {
+                this.recognition.stop();
+                
+                setTimeout(() => {
+                    if (this.isRecognizing) {
+                        try {
+                            this.recognition.start();
+                            this.restartCount++;
+                            logDebug('Recognition restarted for mobile');
+                            
+                            // Schedule next restart check
+                            this.recognitionTimeout = setTimeout(() => {
+                                this.setupAutoRestart();
+                            }, 5000);
+                        } catch (error) {
+                            logDebug('Error in recognition restart: ' + error.message);
+                            // Try one more time after a longer delay
+                            setTimeout(() => {
+                                if (this.isRecognizing) {
+                                    try {
+                                        this.recognition.start();
+                                    } catch (e) {
+                                        // Give up after multiple failures
+                                        logDebug('Failed to restart recognition after multiple attempts');
+                                    }
+                                }
+                            }, 1000);
+                        }
+                    }
+                }, 300);
+            }
+        } catch (error) {
+            logDebug('Error in auto-restart: ' + error.message);
         }
     }
     
@@ -198,9 +325,6 @@ class SpeechRecognizer {
         
         const lastWord = words[words.length - 1].toLowerCase().replace(/[^\w]/g, '');
         
-        // Prevent processing very short words from interim results
-        if (!isFinal && lastWord.length < 3) return;
-        
         // Don't process the same word repeatedly
         if (lastWord === this.lastProcessedWord) return;
         
@@ -211,11 +335,6 @@ class SpeechRecognizer {
         this.processingWord = true;
         this.lastProcessedWord = lastWord;
         
-        // Call the result callback with just the last word
-        if (this.onResultCallback) {
-            this.onResultCallback(lastWord);
-        }
-        
         // Reset processing state after a short delay
         if (this.processingTimeout) {
             clearTimeout(this.processingTimeout);
@@ -223,7 +342,7 @@ class SpeechRecognizer {
         
         this.processingTimeout = setTimeout(() => {
             this.processingWord = false;
-        }, 1000); // 1 second cooldown before processing another word
+        }, 250); // quarter second cooldown 
     }
     
     /**
@@ -239,9 +358,46 @@ class SpeechRecognizer {
                 break;
             case 'not-allowed':
                 errorMessage = 'Microphone access denied';
+                // On mobile, this often means permissions weren't granted properly
+                if (this.isMobile) {
+                    alert('Please grant microphone permission to use speech recognition');
+                }
                 break;
             case 'no-speech':
                 errorMessage = 'No speech detected';
+                // This is common and not critical - just retry automatically
+                if (this.isMobile && this.isRecognizing) {
+                    setTimeout(() => {
+                        if (this.isRecognizing) {
+                            try {
+                                this.recognition.stop();
+                                setTimeout(() => {
+                                    if (this.isRecognizing) {
+                                        this.recognition.start();
+                                        logDebug('Recognition restarted after no-speech error');
+                                    }
+                                }, 300);
+                            } catch (e) {
+                                logDebug('Error restarting after no-speech: ' + e.message);
+                            }
+                        }
+                    }, 500);
+                }
+                break;
+            case 'aborted':
+                // This happens sometimes when the page loses focus - just restart if needed
+                if (this.isMobile && this.isRecognizing) {
+                    setTimeout(() => {
+                        if (this.isRecognizing) {
+                            try {
+                                this.recognition.start();
+                                logDebug('Recognition restarted after abort error');
+                            } catch (e) {
+                                logDebug('Error restarting after abort: ' + e.message);
+                            }
+                        }
+                    }, 500);
+                }
                 break;
             default:
                 errorMessage = `Error: ${event.error}`;
@@ -276,6 +432,11 @@ class SpeechRecognizer {
         try {
             // Create audio context
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            
+            // On mobile devices, resume the audio context to ensure it's active
+            if (this.isMobile && this.audioContext.state !== 'running') {
+                await this.audioContext.resume();
+            }
             
             // Get microphone access
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -372,13 +533,71 @@ class SpeechRecognizer {
     }
     
     /**
+     * Check if speech recognition is supported in this browser
+     */
+    isRecognitionSupported() {
+        return this.isSpeechRecognitionSupported;
+    }
+    
+    /**
+     * Check if speech synthesis is supported in this browser
+     */
+    isSynthesisSupported() {
+        return this.isSpeechSynthesisSupported;
+    }
+    
+    /**
      * Speak text using speech synthesis
      */
-    speak(text) {
-        if ('speechSynthesis' in window) {
+    speak(text, priority = false) {
+        if (this.isSpeechSynthesisSupported) {
+            // Cancel any ongoing speech if this is a priority message
+            if (priority && window.speechSynthesis.speaking) {
+                window.speechSynthesis.cancel();
+            }
+            
             const utterance = new SpeechSynthesisUtterance(text);
+            
+            // Configure speech properties
+            utterance.rate = 1.0; // Normal speed
+            utterance.pitch = 1.0; // Normal pitch
+            utterance.volume = 1.0; // Full volume
+            
+            // On mobile devices, we need to ensure speedy response
+            if (this.isMobile) {
+                utterance.rate = 1.1; // Slightly faster on mobile
+                
+                // Fix for Chrome on Android cutting off speech
+                utterance.onend = () => {
+                    logDebug(`TTS completed: "${text}"`);
+                };
+                
+                utterance.onerror = (e) => {
+                    logDebug(`TTS error: ${e.error}`);
+                };
+            }
+            
+            // Try to set appropriate voice for the language
+            if (this.voices && this.voices.length > 0) {
+                const langCode = this.currentLanguage.split('-')[0].toLowerCase();
+                // Find a matching voice for the language
+                const matchingVoice = this.voices.find(voice => 
+                    voice.lang.toLowerCase().startsWith(langCode)
+                );
+                if (matchingVoice) {
+                    utterance.voice = matchingVoice;
+                    logDebug(`Using voice: ${matchingVoice.name} for ${langCode}`);
+                }
+            }
+            
+            // Log what's being spoken for debugging
+            logDebug(`Speaking: "${text}"`);
+            
             window.speechSynthesis.speak(utterance);
+            
+            return utterance;
         }
+        return null;
     }
 }
 
