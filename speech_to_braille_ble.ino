@@ -283,8 +283,56 @@ class CharacteristicCallbacks: public BLECharacteristicCallbacks {
       Serial.print(" bytes): ");
       Serial.println(value.c_str());
       
+      // Check if we have a direct pin control command (P:cell,pin,value)
+      if (value.length() >= 2 && value[0] == 'P' && value[1] == ':') {
+        // Extract the pin control part (skip the "P:" prefix)
+        std::string controlString = value.substr(2);
+        
+        // Parse the parameters: cell, pin, value
+        int cell = -1, pin = -1, pinValue = -1;
+        size_t firstComma = controlString.find(',');
+        
+        if (firstComma != std::string::npos) {
+          std::string cellStr = controlString.substr(0, firstComma);
+          cell = atoi(cellStr.c_str());
+          
+          size_t secondComma = controlString.find(',', firstComma + 1);
+          if (secondComma != std::string::npos) {
+            std::string pinStr = controlString.substr(firstComma + 1, secondComma - firstComma - 1);
+            pin = atoi(pinStr.c_str());
+            
+            std::string valueStr = controlString.substr(secondComma + 1);
+            pinValue = atoi(valueStr.c_str());
+          }
+        }
+        
+        // Validate parameters
+        if (cell >= 0 && cell < NUM_CELLS && pin >= 0 && pin < NUM_PINS && 
+            (pinValue == 0 || pinValue == 1)) {
+          // Valid parameters, control the pin
+          digitalWrite(braillePins[cell][pin], pinValue ? HIGH : LOW);
+          
+          // Update tracking variables for auto-reset
+          outputActive = true;
+          lastOutputTime = millis();
+          
+          Serial.print("[DEBUG PIN] Setting cell ");
+          Serial.print(cell);
+          Serial.print(" pin ");
+          Serial.print(pin);
+          Serial.print(" to ");
+          Serial.println(pinValue ? "HIGH" : "LOW");
+          
+          // Flash LED to indicate command received
+          digitalWrite(STATUS_LED_PIN, LOW);
+          delay(20);
+          digitalWrite(STATUS_LED_PIN, HIGH);
+        } else {
+          Serial.println("Invalid pin control parameters: cell must be 0-2, pin must be 0-5, value must be 0 or 1");
+        }
+      }
       // Check if we have phase information (starts with O: or N:)
-      if (value.length() >= 2 && value[1] == ':') {
+      else if (value.length() >= 2 && value[1] == ':') {
         // Extract phase
         char phaseChar = value[0];
         currentPhase = (phaseChar == 'O') ? PHASE_OUTPUT : PHASE_NOT_OUTPUT;

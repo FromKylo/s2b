@@ -612,13 +612,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // Add event listener for the braille test button
     const testButton = document.getElementById('braille-test-button');
     if (testButton && window.bleHandler) {
-        testButton.addEventListener('click', window.bleHandler.runBrailleTest);
+        testButton.addEventListener('click', runCompleteBrailleTest);
     }
     
     // Create BLE speed test UI if BLE handler is available
     if (window.bleHandler) {
         window.bleHandler.createBleSpeedTestUI();
     }
+    
+    // Initialize the BLE debug console (F12)
+    initBleDebugConsole();
 });
 
 // Handle page visibility changes to manage speech recognition
@@ -661,4 +664,411 @@ function flashWordSent(word) {
         feedbackDiv.style.opacity = '0';
         setTimeout(() => feedbackDiv.remove(), 1000);
     }, 2000);
+}
+
+/**
+ * Run a comprehensive braille test that cycles through all letters and numbers
+ */
+async function runCompleteBrailleTest() {
+    if (!window.bleHandler || !window.bleHandler.isConnectedToBLE) {
+        alert('Please connect to the braille display first.');
+        return;
+    }
+    
+    // Disable the button during the test
+    const testButton = document.getElementById('braille-test-button');
+    testButton.disabled = true;
+    testButton.style.opacity = '0.6';
+    testButton.textContent = 'Testing...';
+    
+    try {
+        // Create a test status display
+        const statusDiv = document.createElement('div');
+        statusDiv.style.position = 'fixed';
+        statusDiv.style.top = '20px';
+        statusDiv.style.left = '50%';
+        statusDiv.style.transform = 'translateX(-50%)';
+        statusDiv.style.backgroundColor = '#2196F3';
+        statusDiv.style.color = 'white';
+        statusDiv.style.padding = '10px 20px';
+        statusDiv.style.borderRadius = '5px';
+        statusDiv.style.zIndex = '1000';
+        document.body.appendChild(statusDiv);
+        
+        // Get all alphabet letters from a-z
+        const alphabetChars = [];
+        for (let i = 0; i < 26; i++) {
+            alphabetChars.push(String.fromCharCode(97 + i)); // lowercase a-z
+        }
+        
+        // Add number words
+        const numberWords = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'zero'];
+        
+        // Combine both sets for testing
+        const testItems = [...alphabetChars, ...numberWords];
+        
+        // Clear any existing braille display
+        brailleOutput.innerHTML = '';
+        
+        // Loop through each character and test it
+        for (let i = 0; i < testItems.length; i++) {
+            const item = testItems[i];
+            statusDiv.textContent = `Testing: ${item} (${i+1}/${testItems.length})`;
+            
+            // Find the braille pattern for this character
+            const match = brailleDB.findWord(item);
+            
+            if (match) {
+                console.log(`Testing braille pattern for: ${item}`, match);
+                
+                // Visualize on screen
+                displayBrailleOutput([match]);
+                
+                // Send to BLE device
+                if (window.bleHandler && window.bleHandler.isConnectedToBLE) {
+                    await window.bleHandler.sendBrailleToBLE(match);
+                }
+                
+                // Wait a moment before showing the next character
+                await new Promise(resolve => setTimeout(resolve, 800));
+            } else {
+                console.warn(`No braille pattern found for: ${item}`);
+            }
+        }
+        
+        // Clear the braille output
+        brailleOutput.innerHTML = '';
+        
+        // Remove the status div
+        statusDiv.textContent = "Test Complete!";
+        statusDiv.style.backgroundColor = "#4CAF50";
+        setTimeout(() => statusDiv.remove(), 2000);
+        
+    } catch (error) {
+        console.error('Braille test error:', error);
+        alert(`Test failed: ${error.message}`);
+    } finally {
+        // Re-enable button
+        testButton.disabled = false;
+        testButton.style.opacity = '1';
+        testButton.textContent = 'Test Braille Display';
+    }
+}
+
+/**
+ * F12 BLE Debug Console - Creates a developer console for BLE debugging
+ */
+function initBleDebugConsole() {
+    // Create debug console elements
+    const consoleContainer = document.createElement('div');
+    consoleContainer.id = 'ble-debug-console';
+    consoleContainer.style.position = 'fixed';
+    consoleContainer.style.bottom = '0';
+    consoleContainer.style.left = '0';
+    consoleContainer.style.width = '100%';
+    consoleContainer.style.height = '0';
+    consoleContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.9)';
+    consoleContainer.style.color = '#fff';
+    consoleContainer.style.zIndex = '10000';
+    consoleContainer.style.transition = 'height 0.3s ease';
+    consoleContainer.style.display = 'flex';
+    consoleContainer.style.flexDirection = 'column';
+    consoleContainer.style.overflow = 'hidden';
+    
+    // Create console header
+    const consoleHeader = document.createElement('div');
+    consoleHeader.style.padding = '8px 15px';
+    consoleHeader.style.borderBottom = '1px solid #444';
+    consoleHeader.style.backgroundColor = '#222';
+    consoleHeader.style.display = 'flex';
+    consoleHeader.style.justifyContent = 'space-between';
+    consoleHeader.style.alignItems = 'center';
+    
+    const headerTitle = document.createElement('span');
+    headerTitle.textContent = 'BLE Debug Console';
+    headerTitle.style.fontWeight = 'bold';
+    
+    const closeButton = document.createElement('button');
+    closeButton.textContent = 'Close';
+    closeButton.style.backgroundColor = '#555';
+    closeButton.style.color = '#fff';
+    closeButton.style.border = 'none';
+    closeButton.style.borderRadius = '4px';
+    closeButton.style.padding = '4px 8px';
+    closeButton.style.cursor = 'pointer';
+    
+    consoleHeader.appendChild(headerTitle);
+    consoleHeader.appendChild(closeButton);
+    
+    // Create console log area
+    const consoleLog = document.createElement('div');
+    consoleLog.id = 'ble-debug-log';
+    consoleLog.style.flex = '1';
+    consoleLog.style.padding = '10px';
+    consoleLog.style.overflowY = 'auto';
+    consoleLog.style.backgroundColor = '#111';
+    consoleLog.style.fontFamily = 'monospace';
+    consoleLog.style.fontSize = '14px';
+    
+    // Create console input area
+    const consoleInput = document.createElement('div');
+    consoleInput.style.display = 'flex';
+    consoleInput.style.padding = '10px';
+    consoleInput.style.borderTop = '1px solid #444';
+    
+    const promptLabel = document.createElement('span');
+    promptLabel.textContent = '> ';
+    promptLabel.style.color = '#0f0';
+    promptLabel.style.marginRight = '5px';
+    promptLabel.style.fontFamily = 'monospace';
+    
+    const inputField = document.createElement('input');
+    inputField.id = 'ble-debug-input';
+    inputField.type = 'text';
+    inputField.style.flex = '1';
+    inputField.style.backgroundColor = '#222';
+    inputField.style.color = '#fff';
+    inputField.style.border = 'none';
+    inputField.style.fontFamily = 'monospace';
+    inputField.placeholder = 'Type command (e.g., "send:O:[[1,3,5]]" or "help" for commands)';
+    
+    const sendButton = document.createElement('button');
+    sendButton.textContent = 'Send';
+    sendButton.style.backgroundColor = '#2196F3';
+    sendButton.style.color = '#fff';
+    sendButton.style.border = 'none';
+    sendButton.style.borderRadius = '4px';
+    sendButton.style.marginLeft = '10px';
+    sendButton.style.padding = '0 10px';
+    sendButton.style.cursor = 'pointer';
+    
+    consoleInput.appendChild(promptLabel);
+    consoleInput.appendChild(inputField);
+    consoleInput.appendChild(sendButton);
+    
+    // Assemble console
+    consoleContainer.appendChild(consoleHeader);
+    consoleContainer.appendChild(consoleLog);
+    consoleContainer.appendChild(consoleInput);
+    
+    // Add to document
+    document.body.appendChild(consoleContainer);
+    
+    // Define the console state variables
+    let isConsoleOpen = false;
+    
+    // Function to log to console with color
+    function logToConsole(message, color = '#fff') {
+        const logEntry = document.createElement('div');
+        logEntry.style.marginBottom = '5px';
+        logEntry.style.color = color;
+        
+        // Format timestamp
+        const timestamp = new Date();
+        const timeStr = timestamp.toTimeString().split(' ')[0] + '.' + timestamp.getMilliseconds().toString().padStart(3, '0');
+        
+        logEntry.innerHTML = `<span style="color:#888;">[${timeStr}]</span> ${message}`;
+        consoleLog.appendChild(logEntry);
+        consoleLog.scrollTop = consoleLog.scrollHeight;
+    }
+    
+    // Function to toggle console visibility
+    function toggleConsole() {
+        isConsoleOpen = !isConsoleOpen;
+        consoleContainer.style.height = isConsoleOpen ? '50%' : '0';
+        
+        if (isConsoleOpen) {
+            inputField.focus();
+            logToConsole('BLE Debug Console initialized. Type "help" for available commands.', '#0f0');
+        }
+    }
+    
+    // Function to process console commands
+    function processCommand(command) {
+        // Log the command
+        logToConsole(`> ${command}`, '#0f0');
+        
+        // Process by command type
+        if (command.toLowerCase() === 'help') {
+            logToConsole('Available commands:', '#ff0');
+            logToConsole('- help: Display this help message', '#ff0');
+            logToConsole('- status: Show BLE connection status', '#ff0');
+            logToConsole('- connect: Connect to BLE device', '#ff0');
+            logToConsole('- clear: Clear the console', '#ff0');
+            logToConsole('- send:[data]: Send data to Arduino (e.g., send:O:[[1,2,3]])', '#ff0');
+            logToConsole('- test:[letter/number]: Test a specific letter or number (e.g., test:a)', '#ff0');
+            logToConsole('- pins:[cell,pin,value]: Set a specific braille pin (e.g., pins:0,2,1)', '#ff0');
+        } 
+        else if (command.toLowerCase() === 'status') {
+            logToConsole(`BLE Connection: ${window.bleHandler?.isConnectedToBLE ? 'Connected' : 'Disconnected'}`, '#ff0');
+        }
+        else if (command.toLowerCase() === 'connect') {
+            if (!window.bleHandler) {
+                logToConsole('BLE handler not available!', '#f00');
+                return;
+            }
+            
+            logToConsole('Attempting to connect to BLE device...', '#ff0');
+            window.bleHandler.connectToBLE()
+                .then(success => {
+                    if (success) {
+                        logToConsole('BLE connection established!', '#0f0');
+                    } else {
+                        logToConsole('BLE connection failed!', '#f00');
+                    }
+                })
+                .catch(error => {
+                    logToConsole(`BLE connection error: ${error.message}`, '#f00');
+                });
+        }
+        else if (command.toLowerCase() === 'clear') {
+            consoleLog.innerHTML = '';
+            logToConsole('Console cleared.', '#0f0');
+        }
+        else if (command.toLowerCase().startsWith('send:')) {
+            if (!window.bleHandler?.isConnectedToBLE) {
+                logToConsole('Error: Not connected to BLE device!', '#f00');
+                return;
+            }
+            
+            const data = command.substring(5); // Remove 'send:' prefix
+            logToConsole(`Sending data: ${data}`, '#ff0');
+            
+            try {
+                const encoder = new TextEncoder();
+                window.bleHandler.brailleCharacteristic.writeValue(encoder.encode(data))
+                    .then(() => {
+                        logToConsole('Data sent successfully!', '#0f0');
+                    })
+                    .catch(error => {
+                        logToConsole(`Error sending data: ${error.message}`, '#f00');
+                    });
+            } catch (error) {
+                logToConsole(`Error preparing data: ${error.message}`, '#f00');
+            }
+        }
+        else if (command.toLowerCase().startsWith('test:')) {
+            // Extract character to test
+            const char = command.substring(5).trim(); // Remove 'test:' prefix
+            
+            if (!char) {
+                logToConsole('Please specify a character to test (e.g., test:a)', '#f00');
+                return;
+            }
+            
+            // Find the braille pattern for this character
+            const match = brailleDB.findWord(char);
+            
+            if (match) {
+                logToConsole(`Testing braille pattern for: ${char}`, '#ff0');
+                logToConsole(`Pattern: ${JSON.stringify(match.array)}`, '#ff0');
+                
+                // Display on screen
+                displayBrailleOutput([match]);
+                
+                // Send to BLE
+                if (window.bleHandler?.isConnectedToBLE) {
+                    window.bleHandler.sendBrailleToBLE(match)
+                        .then(() => {
+                            logToConsole('Test pattern sent successfully!', '#0f0');
+                        })
+                        .catch(error => {
+                            logToConsole(`Error sending test: ${error.message}`, '#f00');
+                        });
+                } else {
+                    logToConsole('Error: Not connected to BLE device!', '#f00');
+                }
+            } else {
+                logToConsole(`No braille pattern found for: ${char}`, '#f00');
+            }
+        }
+        else if (command.toLowerCase().startsWith('pins:')) {
+            // Format: pins:cell,pin,value (e.g., pins:0,2,1)
+            const params = command.substring(5).split(',').map(p => parseInt(p.trim()));
+            
+            if (params.length !== 3 || isNaN(params[0]) || isNaN(params[1]) || isNaN(params[2])) {
+                logToConsole('Invalid format. Use: pins:cell,pin,value (e.g., pins:0,2,1)', '#f00');
+                return;
+            }
+            
+            const [cell, pin, value] = params;
+            
+            if (cell < 0 || cell > 2) {
+                logToConsole('Invalid cell number (0-2)', '#f00');
+                return;
+            }
+            
+            if (pin < 0 || pin > 5) {
+                logToConsole('Invalid pin number (0-5)', '#f00');
+                return;
+            }
+            
+            if (value !== 0 && value !== 1) {
+                logToConsole('Invalid pin value (0 or 1)', '#f00');
+                return;
+            }
+            
+            // Create a direct pin control command
+            // Format: P:cell,pin,value (e.g., P:0,2,1)
+            const data = `P:${cell},${pin},${value}`;
+            
+            if (window.bleHandler?.isConnectedToBLE) {
+                logToConsole(`Sending pin command: ${data}`, '#ff0');
+                const encoder = new TextEncoder();
+                window.bleHandler.brailleCharacteristic.writeValue(encoder.encode(data))
+                    .then(() => {
+                        logToConsole('Pin command sent successfully!', '#0f0');
+                    })
+                    .catch(error => {
+                        logToConsole(`Error sending pin command: ${error.message}`, '#f00');
+                    });
+            } else {
+                logToConsole('Error: Not connected to BLE device!', '#f00');
+            }
+        }
+        else {
+            logToConsole(`Unknown command: ${command}. Type "help" for available commands.`, '#f00');
+        }
+    }
+    
+    // Event listeners
+    closeButton.addEventListener('click', toggleConsole);
+    
+    sendButton.addEventListener('click', () => {
+        const command = inputField.value.trim();
+        if (command) {
+            processCommand(command);
+            inputField.value = '';
+        }
+    });
+    
+    inputField.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            const command = inputField.value.trim();
+            if (command) {
+                processCommand(command);
+                inputField.value = '';
+            }
+        }
+    });
+    
+    // Global F12 key listener
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'F12') {
+            e.preventDefault(); // Prevent browser's dev tools from opening
+            toggleConsole();
+        }
+    });
+    
+    // Export debug functions to the global console
+    window.bleDebug = {
+        log: (message) => logToConsole(message),
+        error: (message) => logToConsole(message, '#f00'),
+        success: (message) => logToConsole(message, '#0f0'),
+        warn: (message) => logToConsole(message, '#ff0'),
+        send: (data) => processCommand(`send:${data}`),
+        toggle: toggleConsole
+    };
+    
+    logToConsole('BLE Debug Console initialized. Press F12 to toggle.', '#0f0');
 }
