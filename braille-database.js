@@ -120,7 +120,7 @@ class BrailleDatabase {
     /**
      * Search for braille patterns matching words in a text
      * @param {string} text - Text containing words to search for
-     * @returns {Array} - Array of matching braille entries
+     * @returns {Array} - Array of matching braille entries or null for words not found
      */
     searchWords(text) {
         if (!text || typeof text !== 'string') return [];
@@ -131,9 +131,8 @@ class BrailleDatabase {
         for (const word of words) {
             if (word) {
                 const match = this.findWord(word);
-                if (match) {
-                    results.push(match);
-                }
+                // Add the match if found, or add a null entry to indicate word wasn't found
+                results.push(match || { word: word, found: false });
             }
         }
 
