@@ -15,10 +15,17 @@
         <div id="ble-status">
             <span id="connection-status">Disconnected</span>
             <button id="ble-connect" class="btn">Connect Display</button>
+            <button id="ble-test" class="btn btn-secondary">Test BLE</button>
         </div>
     </header>
 
     <main>
+        <!-- Add database status div -->
+        <div id="database-status" class="status-message hidden">
+            <span class="status-icon">⚠️</span>
+            <span class="status-text">Database not loaded. Some features may not work.</span>
+        </div>
+        
         <!-- Phase 1: Introduction -->
         <section id="intro-phase" class="app-phase active">
             <div class="container">

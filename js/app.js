@@ -25,8 +25,25 @@ class SpeechToBrailleApp {
         const brailleCellsContainer = document.querySelector('.braille-cells-container');
         this.brailleCellRenderer = new BrailleCellRenderer(brailleCellsContainer);
         
-        // Load braille database
-        await this.brailleTranslator.initialize();
+        // Load braille database with explicit feedback
+        logDebug('Starting braille database initialization...');
+        const dbInitialized = await this.brailleTranslator.initialize();
+        
+        if (!dbInitialized) {
+            logDebug('WARNING: Failed to initialize braille database. Creating basic fallback database.');
+            // Create a basic fallback database with just alphabet
+            this.createFallbackDatabase();
+        }
+        
+        // Verify database has entries
+        if (this.brailleTranslator.totalEntries === 0) {
+            logDebug('ERROR: No braille entries loaded. Check CSV file path and format.');
+            document.getElementById('debug-console').classList.remove('hidden');
+            document.getElementById('debug-output').innerHTML += 
+                '<span style="color:red;font-weight:bold;">DATABASE NOT LOADED! Check braille-database.csv</span>\n';
+        } else {
+            logDebug(`Braille database loaded with ${this.brailleTranslator.totalEntries} entries`);
+        }
         
         // Set up event listeners
         this.setupEventListeners();
@@ -39,12 +56,58 @@ class SpeechToBrailleApp {
     }
     
     /**
+     * Create a basic fallback database with just alphabet
+     * This will allow the app to function if CSV loading fails
+     */
+    createFallbackDatabase() {
+        logDebug('Creating basic fallback database');
+        
+        // Basic alphabet a-z
+        const alphabet = 'abcdefghijklmnopqrstuvwxyz'.split('');
+        
+        // Set up minimal database structure
+        this.brailleTranslator.database = {
+            'UEB': {}
+        };
+        
+        // Standard braille patterns for alphabet
+        const patterns = [
+            [[1]], [[1,2]], [[1,4]], [[1,4,5]], [[1,5]],
+            [[1,2,4]], [[1,2,4,5]], [[1,2,5]], [[2,4]], [[2,4,5]],
+            [[1,3]], [[1,2,3]], [[1,3,4]], [[1,3,4,5]], [[1,3,5]],
+            [[1,2,3,4]], [[1,2,3,4,5]], [[1,2,3,5]], [[2,3,4]], [[2,3,4,5]],
+            [[1,3,6]], [[1,2,3,6]], [[2,4,5,6]], [[1,3,4,6]], [[1,3,4,5,6]], [[1,3,5,6]]
+        ];
+        
+        // Create entries
+        for (let i = 0; i < alphabet.length; i++) {
+            const letter = alphabet[i];
+            const pattern = patterns[i] || [[1]]; // Default to 'a' if pattern missing
+            
+            this.brailleTranslator.database.UEB[letter] = {
+                braille: '', // No Unicode braille character
+                array: JSON.stringify([pattern]) // Ensure proper nesting
+            };
+        }
+        
+        this.brailleTranslator.isLoaded = true;
+        this.brailleTranslator.totalEntries = alphabet.length;
+        
+        logDebug(`Created fallback database with ${alphabet.length} entries`);
+    }
+    
+    /**
      * Set up event listeners for UI interactions
      */
     setupEventListeners() {
         // BLE connection
         document.getElementById('ble-connect').addEventListener('click', () => {
             this.connectBleDevice();
+        });
+        
+        // Add BLE test button handler
+        document.getElementById('ble-test').addEventListener('click', () => {
+            this.testBleTransmission();
         });
         
         // Phase navigation
@@ -245,6 +308,43 @@ class SpeechToBrailleApp {
         this.showOutputPhase();
         document.getElementById('recognized-word').textContent = 'Testing Braille Patterns...';
         this.brailleCellRenderer.renderAlphabetTest();
+    }
+    
+    /**
+     * Test BLE data transmission
+     */
+    async testBleTransmission() {
+        if (!this.bleConnection.isConnected()) {
+            logDebug('Cannot test: Not connected to BLE device');
+            alert('Please connect to the BLE device first');
+            return;
+        }
+        
+        logDebug('Running BLE transmission test...');
+        
+        // Test a simple dot pattern (dots 1,3,5)
+        const testPattern = "[[1,3,5]]";
+        document.getElementById('recognized-word').textContent = "Test Pattern";
+        
+        // Show the output in our UI
+        this.showOutputPhase();
+        this.brailleCellRenderer.renderBrailleCells(testPattern);
+        
+        // First try using the normal channel
+        logDebug('Sending test pattern via normal channel...');
+        const result = await this.bleConnection.sendBraillePattern(testPattern);
+        
+        if (result) {
+            logDebug('Test pattern sent successfully');
+        } else {
+            logDebug('Failed to send via normal channel, trying direct test...');
+            // Try the dedicated test function with alternate methods
+            await this.bleConnection.sendTestPattern();
+        }
+        
+        // Also add this to debug console for visibility
+        document.getElementById('debug-output').innerHTML += 
+            '<span style="color:#4CAF50">BLE test executed - check serial monitor on ESP32</span>\n';
     }
     
     /**

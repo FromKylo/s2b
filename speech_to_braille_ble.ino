@@ -76,6 +76,11 @@ void processArrayString(std::string arrayString) {
   Serial.print("Received array string: ");
   Serial.println(arrayString.c_str());
   
+  // Add a visual indication on the physical device
+  digitalWrite(STATUS_LED_PIN, LOW);
+  delay(50);
+  digitalWrite(STATUS_LED_PIN, HIGH);
+  
   // Check for speed test packets from main characteristic (fallback mode)
   if (arrayString.length() > 2 && arrayString.substr(0, 2) == "S:") {
     // This is a speed test packet using the main characteristic as fallback
@@ -280,8 +285,35 @@ class CharacteristicCallbacks: public BLECharacteristicCallbacks {
     if (value.length() > 0) {
       Serial.print("Received data (");
       Serial.print(value.length());
-      Serial.print(" bytes): ");
-      Serial.println(value.c_str());
+      Serial.print(" bytes): '");
+      
+      // Print the raw data with hex values for non-printable characters
+      for (size_t i = 0; i < value.length(); i++) {
+        if (value[i] >= 32 && value[i] <= 126) {
+          Serial.print(value[i]);
+        } else {
+          Serial.print("[0x");
+          if (value[i] < 16) Serial.print("0");
+          Serial.print((uint8_t)value[i], HEX);
+          Serial.print("]");
+        }
+      }
+      Serial.println("'");
+      
+      // Special handling for test message
+      if (value.find("BLE:HELLO") != std::string::npos) {
+        Serial.println("Received test message - BLE connection working!");
+        
+        // Visual confirmation on device
+        for (int i = 0; i < 3; i++) {
+          digitalWrite(STATUS_LED_PIN, HIGH);
+          delay(100);
+          digitalWrite(STATUS_LED_PIN, LOW);
+          delay(100);
+        }
+        digitalWrite(STATUS_LED_PIN, HIGH);
+        return;
+      }
       
       // Check if we have a direct pin control command (P:cell,pin,value)
       if (value.length() >= 2 && value[0] == 'P' && value[1] == ':') {
@@ -378,6 +410,26 @@ class CharacteristicCallbacks: public BLECharacteristicCallbacks {
           } else {
             Serial.println("Cannot process data: no valid array format detected");
           }
+        }
+      }
+      
+      // Add more robust error handling for array parsing
+      if (value.find("[") != std::string::npos && currentPhase == PHASE_OUTPUT) {
+        // Blink LED rapidly to indicate data being processed
+        digitalWrite(STATUS_LED_PIN, LOW);
+        delay(10);
+        digitalWrite(STATUS_LED_PIN, HIGH);
+        
+        // Log each step of processing
+        Serial.println("Processing as braille pattern array");
+        size_t bracketPos = value.find("[");
+        if (bracketPos != std::string::npos) {
+          std::string arrayPortion = value.substr(bracketPos);
+          Serial.print("Extracted array portion: ");
+          Serial.println(arrayPortion.c_str());
+          processArrayString(arrayPortion);
+        } else {
+          Serial.println("No opening bracket found in data");
         }
       }
     }
@@ -498,8 +550,15 @@ void processBrailleArray(const uint8_t* data, size_t length) {
 }
 
 void setup() {
-  // Initialize serial for debugging
+  // Initialize serial with higher baud rate for faster logging
   Serial.begin(115200);
+  
+  // Wait for serial to connect for debugging purposes
+  delay(1000);
+  
+  Serial.println("\n\n=== Speech-to-Braille BLE Device ===");
+  Serial.println("Build version: " __DATE__ " " __TIME__);
+  
   Serial.println("Starting Speech-to-Braille BLE Device with JSON Array Format");
 
   // Initialize braille pins as outputs and set to LOW
@@ -524,11 +583,12 @@ void setup() {
   // Create BLE service
   BLEService* pService = pServer->createService(BRAILLE_SERVICE_UUID);
 
-  // Create BLE characteristic
+  // Create BLE characteristic with explicit properties
   pCharacteristic = pService->createCharacteristic(
     BRAILLE_CHARACTERISTIC_UUID,
     BLECharacteristic::PROPERTY_READ |
     BLECharacteristic::PROPERTY_WRITE |
+    BLECharacteristic::PROPERTY_WRITE_NR |  // Add write without response property
     BLECharacteristic::PROPERTY_NOTIFY |
     BLECharacteristic::PROPERTY_INDICATE
   );
@@ -559,7 +619,28 @@ void setup() {
   pAdvertising->setMinPreferred(0x12);
   BLEDevice::startAdvertising();
   
+  // Add debugging outputs
+  Serial.println("Braille pins configured:");
+  for (int cell = 0; cell < NUM_CELLS; cell++) {
+    Serial.print("  Cell ");
+    Serial.print(cell);
+    Serial.print(": Pins [");
+    for (int pin = 0; pin < NUM_PINS; pin++) {
+      Serial.print(braillePins[cell][pin]);
+      if (pin < NUM_PINS - 1) Serial.print(", ");
+    }
+    Serial.println("]");
+  }
+  
   Serial.println("BLE server ready. Waiting for connections...");
+  
+  // Visual indicator that setup is complete
+  for (int i = 0; i < 5; i++) {
+    digitalWrite(STATUS_LED_PIN, HIGH);
+    delay(100);
+    digitalWrite(STATUS_LED_PIN, LOW);
+    delay(100);
+  }
 }
 
 void loop() {

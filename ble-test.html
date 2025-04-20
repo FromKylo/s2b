@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BLE Test Tool</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #2196F3;
+        }
+        button {
+            padding: 10px 15px;
+            margin: 5px;
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0b7dda;
+        }
+        #log {
+            border: 1px solid #ccc;
+            padding: 10px;
+            height: 300px;
+            overflow-y: auto;
+            background-color: #f5f5f5;
+            margin-top: 20px;
+            font-family: monospace;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+    </style>
+</head>
+<body>
+    <h1>BLE Braille Display Test Tool</h1>
+    <p>Use this tool to test BLE connectivity with the Braille Display device</p>
+    
+    <div>
+        <button id="connect">Connect</button>
+        <button id="disconnect" disabled>Disconnect</button>
+    </div>
+    
+    <div>
+        <h3>Test Commands</h3>
+        <button id="test1" disabled>Test Single Cell [1,3,5]</button>
+        <button id="test2" disabled>Test Multiple Cells [[1,2],[3,4]]</button>
+        <button id="test3" disabled>Send Raw Command</button>
+        <input type="text" id="rawCommand" placeholder="Command (e.g., O:[[1,2,3]])" disabled>
+    </div>
+    
+    <pre id="log">Logs will appear here...</pre>
+    
+    <script>
+        // BLE variables
+        let device = null;
+        let server = null;
+        let service = null;
+        let characteristic = null;
+        
+        // Constants
+        const SERVICE_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
+        const CHARACTERISTIC_UUID = "19b10001-e8f2-537e-4f6c-d104768a1214";
+        
+        // UI elements
+        const connectBtn = document.getElementById('connect');
+        const disconnectBtn = document.getElementById('disconnect');
+        const test1Btn = document.getElementById('test1');
+        const test2Btn = document.getElementById('test2');
+        const test3Btn = document.getElementById('test3');
+        const rawCommandInput = document.getElementById('rawCommand');
+        const logElement = document.getElementById('log');
+        
+        // Log function
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            logElement.innerHTML += `<span class="${type}">[${timestamp}] ${message}</span>\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+            console.log(`[${type}] ${message}`);
+        }
+        
+        // Connect to BLE device
+        async function connect() {
+            try {
+                log('Requesting BLE device...');
+                
+                device = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: 'Braille Display' }],
+                    optionalServices: [SERVICE_UUID]
+                });
+                
+                log(`Device found: ${device.name}`, 'success');
+                
+                // Set up disconnect listener
+                device.addEventListener('gattserverdisconnected', () => {
+                    log('Device disconnected', 'error');
+                    updateUI(false);
+                });
+                
+                log('Connecting to GATT server...');
+                server = await device.gatt.connect();
+                
+                log('Getting primary service...');
+                service = await server.getPrimaryService(SERVICE_UUID);
+                
+                log('Getting characteristic...');
+                characteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+                
+                log('Connected successfully!', 'success');
+                updateUI(true);
+                
+            } catch (error) {
+                log(`Error: ${error.message}`, 'error');
+                updateUI(false);
+            }
+        }
+        
+        // Disconnect from BLE device
+        async function disconnect() {
+            try {
+                if (device && device.gatt.connected) {
+                    await device.gatt.disconnect();
+                    log('Disconnected successfully', 'info');
+                }
+                updateUI(false);
+            } catch (error) {
+                log(`Error disconnecting: ${error.message}`, 'error');
+            }
+        }
+        
+        // Send data over BLE
+        async function sendData(data) {
+            try {
+                if (!characteristic) {
+                    log('Not connected to device', 'error');
+                    return;
+                }
+                
+                log(`Sending: ${data}`);
+                
+                const encoder = new TextEncoder();
+                const dataBuffer = encoder.encode(data);
+                
+                // Try with write with response first
+                try {
+                    log('Using writeValueWithResponse...');
+                    await characteristic.writeValueWithResponse(dataBuffer);
+                    log('Data sent successfully with response', 'success');
+                } catch (writeError) {
+                    log(`writeValueWithResponse failed: ${writeError.message}`, 'error');
+                    
+                    // Fallback to standard write
+                    try {
+                        log('Using writeValue...');
+                        await characteristic.writeValue(dataBuffer);
+                        log('Data sent successfully', 'success');
+                    } catch (fallbackError) {
+                        log(`All write methods failed: ${fallbackError.message}`, 'error');
+                    }
+                }
+            } catch (error) {
+                log(`Error sending data: ${error.message}`, 'error');
+            }
+        }
+        
+        // Update UI based on connection state
+        function updateUI(connected) {
+            connectBtn.disabled = connected;
+            disconnectBtn.disabled = !connected;
+            test1Btn.disabled = !connected;
+            test2Btn.disabled = !connected;
+            test3Btn.disabled = !connected;
+            rawCommandInput.disabled = !connected;
+        }
+        
+        // Event listeners
+        connectBtn.addEventListener('click', connect);
+        disconnectBtn.addEventListener('click', disconnect);
+        
+        test1Btn.addEventListener('click', () => {
+            sendData('O:[[1,3,5]]');
+        });
+        
+        test2Btn.addEventListener('click', () => {
+            sendData('O:[[1,2],[3,4]]');
+        });
+        
+        test3Btn.addEventListener('click', () => {
+            const command = rawCommandInput.value.trim();
+            if (command) {
+                sendData(command);
+            } else {
+                log('Please enter a command', 'error');
+            }
+        });
+        
+        // Check if BLE is supported
+        if (!navigator.bluetooth) {
+            log('Web Bluetooth API is not supported in this browser', 'error');
+            connectBtn.disabled = true;
+        } else {
+            log('Web Bluetooth API is supported', 'info');
+        }
+    </script>
+</body>
+</html>

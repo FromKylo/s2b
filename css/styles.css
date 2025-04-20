@@ -286,6 +286,28 @@ main {
     margin-left: 0.5rem;
 }
 
+/* Database status message */
+.status-message {
+    background-color: #FFF3CD;
+    color: #856404;
+    padding: 0.75rem 1.25rem;
+    margin: 1rem 0;
+    border: 1px solid #FFEEBA;
+    border-radius: var(--border-radius);
+    display: flex;
+    align-items: center;
+    font-size: 0.9rem;
+}
+
+.status-message.hidden {
+    display: none;
+}
+
+.status-icon {
+    font-size: 1.2rem;
+    margin-right: 0.5rem;
+}
+
 /* Debug Console */
 footer {
     background-color: #212121;

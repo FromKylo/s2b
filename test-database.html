@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Braille Database Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #2196F3;
+        }
+        .container {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px 0;
+        }
+        button:hover {
+            background-color: #0b7dda;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #dff0d8;
+            color: #3c763d;
+        }
+        .error {
+            background-color: #f2dede;
+            color: #a94442;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        #log {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>Braille Database Test Tool</h1>
+    <p>This page tests the loading and parsing of the braille database files.</p>
+    
+    <div class="container">
+        <button id="test-csv">Test CSV Loading</button>
+        <button id="test-json">Test JSON Loading</button>
+        <button id="test-search">Test Word Search</button>
+    </div>
+    
+    <div id="status"></div>
+    <div id="result" class="container" style="display: none;">
+        <h2>Database Statistics</h2>
+        <div id="stats"></div>
+        
+        <h2>Sample Entries</h2>
+        <table id="samples">
+            <thead>
+                <tr>
+                    <th>Word</th>
+                    <th>Braille</th>
+                    <th>Array</th>
+                    <th>Language</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+    
+    <div id="search-result" class="container" style="display: none;">
+        <h2>Search Results</h2>
+        <input type="text" id="search-input" placeholder="Enter a word to search">
+        <button id="search-button">Search</button>
+        <div id="search-output"></div>
+    </div>
+    
+    <h2>Debug Log</h2>
+    <div id="log"></div>
+    
+    <script>
+        // Simple logging function
+        function log(message) {
+            const logElem = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logElem.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+            logElem.scrollTop = logElem.scrollHeight;
+            console.log(message);
+        }
+        
+        // Show status message
+        function showStatus(message, isSuccess) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = isSuccess ? 'success' : 'error';
+        }
+        
+        // Display database statistics
+        function displayStats(database) {
+            const result = document.getElementById('result');
+            const stats = document.getElementById('stats');
+            const samplesBody = document.querySelector('#samples tbody');
+            
+            result.style.display = 'block';
+            stats.innerHTML = '';
+            samplesBody.innerHTML = '';
+            
+            if (!database) {
+                stats.innerHTML = '<p>No database loaded</p>';
+                return;
+            }
+            
+            const languages = Object.keys(database);
+            let totalEntries = 0;
+            for (const lang of languages) {
+                const entries = Object.keys(database[lang]).length;
+                totalEntries += entries;
+                stats.innerHTML += `<p><strong>Language ${lang}:</strong> ${entries} entries</p>`;
+                
+                // Add sample entries to the table
+                let count = 0;
+                for (const word in database[lang]) {
+                    if (count >= 5) break; // Limit to 5 samples per language
+                    
+                    const entry = database[lang][word];
+                    const row = document.createElement('tr');
+                    
+                    row.innerHTML = `
+                        <td>${word}</td>
+                        <td>${entry.braille || '-'}</td>
+                        <td>${entry.array || '-'}</td>
+                        <td>${lang}</td>
+                    `;
+                    
+                    samplesBody.appendChild(row);
+                    count++;
+                }
+            }
+            
+            stats.innerHTML = `<p><strong>Total Languages:</strong> ${languages.length}</p>
+                              <p><strong>Total Entries:</strong> ${totalEntries}</p>` + stats.innerHTML;
+        }
+        
+        // Parse CSV data
+        function parseCSV(csvText) {
+            try {
+                log(`Parsing CSV, ${csvText.length} bytes`);
+                
+                const lines = csvText.split('\n');
+                log(`CSV contains ${lines.length} lines`);
+                
+                if (lines.length < 2) {
+                    log('CSV has too few lines');
+                    return null;
+                }
+                
+                // Initialize database
+                const database = {};
+                let totalEntries = 0;
+                
+                // Get header to determine column positions
+                const header = lines[0].toLowerCase().split(',');
+                const wordIdx = header.indexOf('word');
+                const shortfIdx = header.indexOf('shortf');
+                const brailleIdx = header.indexOf('braille');
+                const arrayIdx = header.indexOf('array');
+                const langIdx = header.indexOf('lang');
+                
+                if (wordIdx === -1 || arrayIdx === -1) {
+                    log('CSV is missing required columns: word or array');
+                    return null;
+                }
+                
+                log(`Found columns: word=${wordIdx}, shortf=${shortfIdx}, braille=${brailleIdx}, array=${arrayIdx}, lang=${langIdx}`);
+                
+                // Skip header row
+                for (let i = 1; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (!line) continue;
+                    
+                    // Split by comma (not handling quoted fields for simplicity)
+                    const fields = line.split(',');
+                    
+                    if (fields.length <= Math.max(wordIdx, arrayIdx, langIdx)) {
+                        continue; // Skip invalid lines
+                    }
+                    
+                    const word = fields[wordIdx].trim();
+                    const shortf = shortfIdx >= 0 && fields[shortfIdx] ? fields[shortfIdx].trim() : '';
+                    const braille = brailleIdx >= 0 && fields[brailleIdx] ? fields[brailleIdx].trim() : '';
+                    let array = arrayIdx >= 0 ? fields[arrayIdx].trim() : '';
+                    const lang = langIdx >= 0 && fields[langIdx] ? fields[langIdx].trim() : 'UEB';
+                    
+                    if (!word || !array) continue;
+                    
+                    // Remove surrounding quotes from array if present
+                    if (array.startsWith('"') && array.endsWith('"')) {
+                        array = array.substring(1, array.length - 1);
+                    }
+                    
+                    // Initialize language object if not exists
+                    if (!database[lang]) {
+                        database[lang] = {};
+                    }
+                    
+                    // Store the word entry
+                    database[lang][word] = {
+                        braille: braille,
+                        array: array
+                    };
+                    
+                    totalEntries++;
+                    
+                    if (shortf && shortf !== word) {
+                        database[lang][shortf] = {
+                            braille: braille,
+                            array: array
+                        };
+                        totalEntries++;
+                    }
+                }
+                
+                log(`CSV parsing complete. Loaded ${totalEntries} entries`);
+                return database;
+            } catch (error) {
+                log(`Error parsing CSV: ${error.message}`);
+                return null;
+            }
+        }
+        
+        // Test CSV loading
+        document.getElementById('test-csv').addEventListener('click', async () => {
+            try {
+                log('Testing CSV loading...');
+                
+                const response = await fetch('./braille-database.csv');
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch CSV: ${response.status} ${response.statusText}`);
+                }
+                
+                const csvText = await response.text();
+                log(`CSV fetched successfully, ${csvText.length} bytes`);
+                
+                // Display first 100 characters
+                log(`CSV preview: ${csvText.substring(0, 100).replace(/\n/g, '\\n')}...`);
+                
+                const database = parseCSV(csvText);
+                
+                if (database) {
+                    showStatus('CSV loaded and parsed successfully', true);
+                    displayStats(database);
+                    window.testDatabase = database; // Store for further testing
+                } else {
+                    showStatus('Failed to parse CSV file', false);
+                }
+            } catch (error) {
+                log(`Error: ${error.message}`);
+                showStatus(`Failed to load CSV: ${error.message}`, false);
+            }
+        });
+        
+        // Test JSON loading
+        document.getElementById('test-json').addEventListener('click', async () => {
+            try {
+                log('Testing JSON loading...');
+                
+                const response = await fetch('./braille-data.json');
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch JSON: ${response.status} ${response.statusText}`);
+                }
+                
+                const json = await response.json();
+                log(`JSON fetched successfully, ${json.length} entries`);
+                
+                // Convert to our database format
+                const database = { 'UEB': {}, 'Philippine': {} };
+                
+                for (const entry of json) {
+                    if (!entry.word || !entry.array) continue;
+                    
+                    const language = entry.lang || 'UEB';
+                    
+                    if (!database[language]) {
+                        database[language] = {};
+                    }
+                    
+                    // Format array as string if it's an actual array
+                    const arrayStr = Array.isArray(entry.array) ? 
+                        JSON.stringify(entry.array) : 
+                        entry.array;
+                    
+                    database[language][entry.word] = {
+                        braille: entry.braille || '',
+                        array: arrayStr
+                    };
+                }
+                
+                showStatus('JSON loaded and parsed successfully', true);
+                displayStats(database);
+                window.testDatabase = database; // Store for further testing
+            } catch (error) {
+                log(`Error: ${error.message}`);
+                showStatus(`Failed to load JSON: ${error.message}`, false);
+            }
+        });
+        
+        // Test word search
+        document.getElementById('test-search').addEventListener('click', () => {
+            document.getElementById('search-result').style.display = 'block';
+        });
+        
+        document.getElementById('search-button').addEventListener('click', () => {
+            const word = document.getElementById('search-input').value.trim().toLowerCase();
+            const output = document.getElementById('search-output');
+            
+            if (!word) {
+                output.innerHTML = '<p>Please enter a word to search</p>';
+                return;
+            }
+            
+            if (!window.testDatabase) {
+                output.innerHTML = '<p>Please load a database first</p>';
+                return;
+            }
+            
+            let found = false;
+            output.innerHTML = '';
+            
+            for (const lang in window.testDatabase) {
+                if (window.testDatabase[lang][word]) {
+                    const entry = window.testDatabase[lang][word];
+                    found = true;
+                    
+                    output.innerHTML += `
+                        <div>
+                            <h3>Found in ${lang}</h3>
+                            <p><strong>Word:</strong> ${word}</p>
+                            <p><strong>Braille:</strong> ${entry.braille || '-'}</p>
+                            <p><strong>Array:</strong> ${entry.array}</p>
+                        </div>
+                    `;
+                }
+            }
+            
+            if (!found) {
+                output.innerHTML = `<p>Word "${word}" not found in any language</p>`;
+            }
+        });
+        
+        // Log initial information
+        log('Database test tool initialized');
+        log('Click "Test CSV Loading" to begin');
+    </script>
+</body>
+</html>
