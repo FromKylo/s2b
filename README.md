@@ -193,20 +193,125 @@ Data is sent in the format: `O:[[1,2,3],[4,5,6]]` where:
 
 ## Debugging Features
 
+
+// ...existing code...
+
+## Debugging Features
+
 ### Debug Console
 
-Press F12 or click "Debug Console" to access debugging tools:
+The debug console provides powerful tools for testing, debugging, and exploring the application's functionality.
 
-* View application logs
-* Send custom commands to the hardware
-* Run a BLE speed test
-* Monitor connection status
+#### Accessing the Debug Console
+
+There are two ways to open the debug console:
+
+1. Press the **F12** key on your keyboard
+2. Click the **Debug Console** button in the application interface
+
+#### Debug Console Commands
+
+| Command | Example | Description |
+|---------|---------|-------------|
+| `O:[array]` | `O:[[1,2,3]]` | Send output pattern directly to the braille device |
+| `N:[]` | `N:[]` | Clear display (lower all dots) |
+| `pins:cell,pin,value` | `pins:0,2,1` | Control individual pin (cell 0-2, pin 0-5, value 0-1) |
+| `test:character` | `test:a` | Test a specific character or word |
+| `test:alphabet` | `test:alphabet` | Run through the entire alphabet |
+| `test:numbers` | `test:numbers` | Test all number representations |
+| `search:word` | `search:hello` | Search the database for a word |
+| `language:code` | `language:UEB` | Set translation language |
+| `language:` | `language:` | View available languages |
+| `clear` | `clear` | Clear the console output |
+| `help` | `help` | Display help information |
+
+#### Testing Braille Patterns
+
+The debug console allows you to test and visualize braille patterns:
+
+**Testing Individual Characters:**
+
+test:a
+
+This will:
+- Show the braille pattern for 'a' in the console
+- Send the pattern to the braille display if connected
+
+**Testing Multiple Characters:**
+
+test:he
+
+This will attempt to find and display the pattern for the entire word.
+
+**Running the Alphabet Test:**
+
+test:alphabet
+
+This will:
+- Cycle through all letters a-z
+- Display each pattern in the console
+- Send each pattern to the braille display (if connected)
+- Show a progress indicator
+
+**Testing Numbers:**
+
+test:numbers
+
+This runs through braille patterns for numbers 0-9.
+
+#### Searching the Braille Database
+
+To search for specific words or characters in the database:
+
+search:the
+
+
+Search results include:
+- The word found
+- The language (e.g., UEB)
+- The braille Unicode character
+- The dot array representation
+- Visual braille pattern
+- A button to send the pattern to the connected device
+
+#### Changing Language
+
+To view available languages:
+
+
+#### Direct Hardware Control
+
+For direct control of the braille hardware:
+
+**Send Patterns:**
+
+O:[[1,2,3],[4,5,6]]
+
+This raises dots 1, 2, and 3 on the first cell, and dots 4, 5, and 6 on the second cell.
+
+**Clear Display:**
+
+N:[]
+
+pins:0,2,1
+
+This sets cell 0, pin 2 to HIGH (raised).
+
+#### BLE Speed Test
+
+To test the communication speed with the braille device:
+1. Click "Run BLE Speed Test" button in the debug console
+2. The test sends multiple packets and measures throughput
+3. Results show packets sent, bytes transferred, and speed (bytes/second)
 
 ### Common Debug Commands
 
 * `O:[[1,2,3]]` - Raise specific dots in Output mode
 * `N:[]` - Lower all dots (clear display)
 * `pins:0,2,1` - Directly control a specific pin (cell, pin, value)
+* `test:a` - Test the letter 'a'
+* `search:and` - Find the braille pattern for 'and'
+
 
 ### BLE Speed Test
 

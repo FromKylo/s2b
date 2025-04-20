@@ -851,20 +851,238 @@ class SpeechToBrailleApp {
      * @param {string} command - The command to send
      */
     async sendDebugCommand(command) {
-        this.log(`Sending debug command: ${command}`);
+        if (!command) return;
         
-        if (!bleConnection.isConnected) {
-            this.log('Cannot send command: not connected to BLE device', 'error');
-            return;
+        // Log the command
+        this.log(`> ${command}`, 'command');
+        
+        // Process different command types
+        if (command.toLowerCase().startsWith('o:') || 
+            command.toLowerCase().startsWith('n:')) {
+            // Direct BLE commands
+            if (!bleConnection.isConnected) {
+                this.log('Cannot send command: BLE not connected', 'error');
+                return;
+            }
+            
+            try {
+                await bleConnection.sendRawCommand(command);
+                this.log('Command sent successfully', 'success');
+            } catch (error) {
+                this.log(`Error sending command: ${error.message}`, 'error');
+            }
+        } 
+        else if (command.toLowerCase().startsWith('pins:')) {
+            // Pin control command
+            if (!bleConnection.isConnected) {
+                this.log('Cannot send pin command: BLE not connected', 'error');
+                return;
+            }
+            
+            try {
+                const params = command.substring(5).split(',').map(p => parseInt(p.trim()));
+                
+                if (params.length !== 3 || isNaN(params[0]) || isNaN(params[1]) || isNaN(params[2])) {
+                    this.log('Invalid format. Use: pins:cell,pin,value (e.g., pins:0,2,1)', 'error');
+                    return;
+                }
+                
+                const [cell, pin, value] = params;
+                
+                if (cell < 0 || cell > 2 || pin < 0 || pin > 5 || (value !== 0 && value !== 1)) {
+                    this.log('Invalid parameters. Cell: 0-2, Pin: 0-5, Value: 0-1', 'error');
+                    return;
+                }
+                
+                await bleConnection.sendRawCommand(`P:${cell},${pin},${value}`);
+                this.log(`Set cell ${cell} pin ${pin} to ${value}`, 'success');
+            } catch (error) {
+                this.log(`Error sending pin command: ${error.message}`, 'error');
+            }
+        }
+        // NEW CODE: Test Braille Commands
+        else if (command.toLowerCase().startsWith('test:')) {
+            const testParam = command.substring(5).trim().toLowerCase();
+            
+            if (!testParam) {
+                this.log('Please specify a test parameter (e.g., test:a, test:alphabet, test:numbers)', 'error');
+                return;
+            }
+            
+            try {
+                if (testParam === 'alphabet') {
+                    this.log('Running alphabet test...', 'info');
+                    const container = document.createElement('div');
+                    container.className = 'debug-braille-output';
+                    this.elements.debugOutput.appendChild(container);
+                    
+                    await brailleTranslation.runAlphabetAndNumbersTest(
+                        container, 
+                        bleConnection.isConnected ? pattern => bleConnection.sendBraillePattern(pattern) : null
+                    );
+                    
+                    this.log('Alphabet test complete', 'success');
+                } 
+                else if (testParam === 'numbers') {
+                    this.log('Running numbers test...', 'info');
+                    const container = document.createElement('div');
+                    container.className = 'debug-braille-output';
+                    this.elements.debugOutput.appendChild(container);
+                    
+                    const numbers = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+                    
+                    for (const num of numbers) {
+                        const pattern = brailleTranslation.translateWord(num);
+                        if (pattern) {
+                            this.log(`Testing number: ${num}`, 'info');
+                            brailleTranslation.renderBrailleCells(pattern, container);
+                            
+                            if (bleConnection.isConnected) {
+                                await bleConnection.sendBraillePattern(pattern);
+                            }
+                            
+                            await new Promise(resolve => setTimeout(resolve, 800));
+                        }
+                    }
+                    
+                    this.log('Numbers test complete', 'success');
+                }
+                else {
+                    // Test a single character or word
+                    const pattern = brailleTranslation.translateWord(testParam);
+                    
+                    if (pattern) {
+                        this.log(`Testing pattern for: ${testParam}`, 'info');
+                        
+                        const container = document.createElement('div');
+                        container.className = 'debug-braille-output';
+                        
+                        // Create word label
+                        const label = document.createElement('div');
+                        label.className = 'debug-braille-label';
+                        label.textContent = testParam;
+                        container.appendChild(label);
+                        
+                        // Render braille pattern
+                        brailleTranslation.renderBrailleCells(pattern, container);
+                        
+                        this.elements.debugOutput.appendChild(container);
+                        
+                        // Send to hardware if connected
+                        if (bleConnection.isConnected) {
+                            await bleConnection.sendBraillePattern(pattern);
+                        }
+                    } else {
+                        this.log(`No pattern found for: ${testParam}`, 'error');
+                    }
+                }
+            } catch (error) {
+                this.log(`Test error: ${error.message}`, 'error');
+            }
+        }
+        // NEW CODE: Database Search Command
+        else if (command.toLowerCase().startsWith('search:')) {
+            const searchTerm = command.substring(7).trim();
+            
+            if (!searchTerm) {
+                this.log('Please specify a search term (e.g., search:hello)', 'error');
+                return;
+            }
+            
+            const result = brailleTranslation.findWordInDatabase(searchTerm);
+            
+            if (result) {
+                const container = document.createElement('div');
+                container.className = 'debug-braille-output';
+                
+                // Format search result
+                const resultHTML = `
+                    <div class="search-result">
+                        <h3>${result.word}</h3>
+                        <ul>
+                            <li><strong>Language:</strong> ${result.lang}</li>
+                            <li><strong>Braille:</strong> ${result.braille || 'None'}</li>
+                            <li><strong>Array:</strong> ${JSON.stringify(result.array)}</li>
+                        </ul>
+                    </div>
+                `;
+                container.innerHTML = resultHTML;
+                
+                // Add braille pattern visualization
+                const patternContainer = document.createElement('div');
+                patternContainer.className = 'braille-preview';
+                container.appendChild(patternContainer);
+                brailleTranslation.renderBrailleCells(result.array, patternContainer);
+                
+                this.elements.debugOutput.appendChild(container);
+                
+                // Send pattern to device if connected
+                if (bleConnection.isConnected) {
+                    const sendButton = document.createElement('button');
+                    sendButton.className = 'debug-send-btn';
+                    sendButton.textContent = 'Send to Device';
+                    sendButton.onclick = async () => {
+                        await bleConnection.sendBraillePattern(result.array);
+                        this.log(`Pattern sent: ${result.word}`, 'success');
+                    };
+                    container.appendChild(sendButton);
+                }
+            } else {
+                this.log(`No database entry found for: ${searchTerm}`, 'error');
+            }
+        }
+        // NEW CODE: Language Selection Command
+        else if (command.toLowerCase().startsWith('language:')) {
+            const language = command.substring(9).trim();
+            
+            if (!language) {
+                // Just show available languages
+                const languages = brailleTranslation.getLanguages();
+                this.log(`Available languages: ${languages.join(', ')}`, 'info');
+                this.log(`Current language: ${brailleTranslation.currentLanguage}`, 'info');
+                return;
+            }
+            
+            if (brailleTranslation.setLanguage(language)) {
+                this.log(`Language set to: ${language}`, 'success');
+            } else {
+                const languages = brailleTranslation.getLanguages();
+                this.log(`Invalid language: ${language}. Available options: ${languages.join(', ')}`, 'error');
+            }
+        }
+        else if (command.toLowerCase() === 'help') {
+            // Display help information
+            const helpText = `
+                <div class="debug-help">
+                    <h3>Debug Console Commands:</h3>
+                    <ul>
+                        <li><code>O:[[1,2,3]]</code> - Send output pattern directly</li>
+                        <li><code>N:[]</code> - Clear display (lower all dots)</li>
+                        <li><code>pins:cell,pin,value</code> - Control individual pin (e.g., pins:0,2,1)</li>
+                        <li><code>test:x</code> - Test character or word (e.g., test:a)</li>
+                        <li><code>test:alphabet</code> - Run through entire alphabet</li>
+                        <li><code>test:numbers</code> - Test all number representations</li>
+                        <li><code>search:word</code> - Search database for a word</li>
+                        <li><code>language:X</code> - Set or view language (e.g., language:UEB)</li>
+                        <li><code>clear</code> - Clear the console</li>
+                        <li><code>help</code> - Show this help text</li>
+                    </ul>
+                </div>
+            `;
+            const helpElement = document.createElement('div');
+            helpElement.innerHTML = helpText;
+            this.elements.debugOutput.appendChild(helpElement);
+        }
+        else if (command.toLowerCase() === 'clear') {
+            this.elements.debugOutput.innerHTML = '';
+        }
+        else {
+            this.log(`Unknown command: ${command}`, 'error');
+            this.log('Type "help" to see available commands', 'info');
         }
         
-        const success = await bleConnection.sendData(command);
-        
-        if (success) {
-            this.log('Command sent successfully');
-        } else {
-            this.log('Failed to send command', 'error');
-        }
+        // Scroll to bottom after command execution
+        this.elements.debugOutput.scrollTop = this.elements.debugOutput.scrollHeight;
     }
 
     /**

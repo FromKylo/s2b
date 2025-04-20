@@ -374,14 +374,21 @@ class BrailleTranslation {
         
         const normalizedWord = word.toLowerCase().trim();
         
-        // Use the map for faster lookup if available
-        if (this.wordMap && this.wordMap.has(normalizedWord)) {
-            return this.wordMap.get(normalizedWord);
-        }
+        // Check each language, starting with the current one
+        const languages = [this.currentLanguage, ...Object.keys(this.brailleDatabase).filter(lang => lang !== this.currentLanguage)];
         
-        // Fallback to array search if not in map or if map doesn't exist
-        if (this.database) {
-            return this.database.find(entry => entry.word.toLowerCase() === normalizedWord);
+        for (const lang of languages) {
+            if (this.brailleDatabase[lang] && this.brailleDatabase[lang][normalizedWord]) {
+                // Return the entry with language information
+                const entry = this.brailleDatabase[lang][normalizedWord];
+                return {
+                    word: normalizedWord,
+                    shortf: entry.shortf,
+                    braille: entry.braille,
+                    array: entry.array,
+                    lang: lang
+                };
+            }
         }
         
         return null;
