@@ -100,7 +100,13 @@ function setupSpeechRecognition() {
                                 
                                 // Send to BLE if connected
                                 if (window.bleHandler && window.bleHandler.isConnectedToBLE) {
-                                    window.bleHandler.sendBrailleToBLE(match);
+                                    try {
+                                        window.bleHandler.sendBrailleToBLE(match);
+                                        // Visual feedback that a word was sent
+                                        flashWordSent(lastWord);
+                                    } catch (err) {
+                                        console.error("BLE transmission error:", err);
+                                    }
                                 }
                                 
                                 // Clear after 8 seconds
@@ -108,6 +114,17 @@ function setupSpeechRecognition() {
                                     brailleOutput.innerHTML = '';
                                 }, 8000);
                             } else {
+                                // Add visual feedback for no match
+                                console.log(`No match found for: ${lastWord}`);
+                                const noMatchElement = document.createElement('div');
+                                noMatchElement.className = 'no-match-feedback';
+                                noMatchElement.textContent = `No braille pattern found for: ${lastWord}`;
+                                noMatchElement.style.color = 'red';
+                                noMatchElement.style.padding = '5px';
+                                noMatchElement.style.margin = '5px 0';
+                                recognizedText.appendChild(noMatchElement);
+                                setTimeout(() => noMatchElement.remove(), 3000);
+                                
                                 // Play no-match audio cue
                                 playAudioCue('no-match');
                             }
@@ -622,3 +639,26 @@ document.addEventListener('visibilitychange', () => {
         }
     }
 });
+
+// Add this new function to provide visual feedback
+function flashWordSent(word) {
+    const feedbackDiv = document.createElement('div');
+    feedbackDiv.textContent = `Sent "${word}" to braille display`;
+    feedbackDiv.style.position = 'fixed';
+    feedbackDiv.style.bottom = '20px';
+    feedbackDiv.style.left = '50%';
+    feedbackDiv.style.transform = 'translateX(-50%)';
+    feedbackDiv.style.backgroundColor = 'rgba(76, 175, 80, 0.8)';
+    feedbackDiv.style.color = 'white';
+    feedbackDiv.style.padding = '10px 20px';
+    feedbackDiv.style.borderRadius = '20px';
+    feedbackDiv.style.zIndex = '1000';
+    document.body.appendChild(feedbackDiv);
+    
+    // Fade out and remove
+    setTimeout(() => {
+        feedbackDiv.style.transition = 'opacity 1s';
+        feedbackDiv.style.opacity = '0';
+        setTimeout(() => feedbackDiv.remove(), 1000);
+    }, 2000);
+}

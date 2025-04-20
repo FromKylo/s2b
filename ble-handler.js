@@ -91,23 +91,56 @@ async function sendBrailleToBLE(brailleMatch) {
         // Format the data to match the ESP32 expectations
         let formatData;
         
+        // Handle both found and not-found matches
+        if (!brailleMatch.array && brailleMatch.found === false) {
+            // This is a word that wasn't found in the database
+            console.log(`No braille pattern for word: ${brailleMatch.word}`);
+            return;
+        }
+        
         // If it's a nested array (multiple cells)
-        if (Array.isArray(brailleMatch.array[0])) {
+        if (Array.isArray(brailleMatch.array) && Array.isArray(brailleMatch.array[0])) {
             // Send as JSON string with phase prefix
             formatData = 'O:' + JSON.stringify(brailleMatch.array);
-        } else {
+        } else if (Array.isArray(brailleMatch.array)) {
             // For single cell patterns, we need to convert to a two-cell format
             // where the pattern is in the first cell and the second cell is empty
             const twoCellArray = [brailleMatch.array, []];
             formatData = 'O:' + JSON.stringify(twoCellArray);
+        } else {
+            console.error('Invalid braille pattern:', brailleMatch);
+            return;
         }
         
-        console.log('Sending to BLE:', formatData);
+        // Log data being sent for debugging
+        console.log(`Sending to BLE device: word="${brailleMatch.word}", data=${formatData}`);
+        
+        // Send to device
         const encoder = new TextEncoder();
         await brailleCharacteristic.writeValue(encoder.encode(formatData));
-        console.log('Data sent successfully');
+        
+        // Add transmission confirmation
+        console.log('Data sent successfully to Arduino');
+        
+        // Add a simple visual feedback that data was sent
+        const bleStatus = document.getElementById('ble-status');
+        if (bleStatus) {
+            const originalText = bleStatus.textContent;
+            bleStatus.textContent = 'Sending data...';
+            setTimeout(() => {
+                bleStatus.textContent = originalText;
+            }, 500);
+        }
     } catch (error) {
         console.error('Error sending data to BLE device:', error);
+        // Visual feedback for error
+        const bleStatus = document.getElementById('ble-status');
+        if (bleStatus) {
+            bleStatus.textContent = 'BLE Error!';
+            setTimeout(() => {
+                updateBleStatus();
+            }, 2000);
+        }
     }
 }
 

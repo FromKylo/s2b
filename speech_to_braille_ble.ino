@@ -72,6 +72,10 @@ void lowerAllDots() {
  * Can handle both single arrays [1,3,4] and nested arrays [[1,2],[3,4]]
  */
 void processArrayString(std::string arrayString) {
+  // Add detailed logging to help diagnose issues
+  Serial.print("Received array string: ");
+  Serial.println(arrayString.c_str());
+  
   // Check for speed test packets from main characteristic (fallback mode)
   if (arrayString.length() > 2 && arrayString.substr(0, 2) == "S:") {
     // This is a speed test packet using the main characteristic as fallback
@@ -98,10 +102,26 @@ void processArrayString(std::string arrayString) {
   
   // Process normal braille data
   // Check for empty array
-  if (arrayString == "[]") {
+  if (arrayString == "[]" || arrayString.length() <= 2) {
     lowerAllDots();
-    Serial.println("Received empty array - lowering all dots");
+    Serial.println("Received empty or invalid array - lowering all dots");
     return;
+  }
+  
+  // Add better error handling for malformed JSON
+  // Trim any whitespace from the string
+  arrayString.erase(0, arrayString.find_first_not_of(" \t\r\n"));
+  arrayString.erase(arrayString.find_last_not_of(" \t\r\n") + 1);
+  
+  // Fix common JSON formatting issues coming from JavaScript
+  if (arrayString[0] != '[') {
+    Serial.println("Missing opening bracket, adding it");
+    arrayString = "[" + arrayString;
+  }
+  
+  if (arrayString[arrayString.length() - 1] != ']') {
+    Serial.println("Missing closing bracket, adding it");
+    arrayString += "]";
   }
   
   // Check if it's a nested array (first non-bracket character after opening bracket is another bracket)
@@ -121,6 +141,7 @@ void processArrayString(std::string arrayString) {
   // Update tracking variables
   outputActive = true;
   lastOutputTime = millis();
+  Serial.println("Braille pattern activated successfully");
 }
 
 /**
@@ -257,7 +278,9 @@ class CharacteristicCallbacks: public BLECharacteristicCallbacks {
     std::string value = pCharacteristic->getValue();
     
     if (value.length() > 0) {
-      Serial.print("Received data: ");
+      Serial.print("Received data (");
+      Serial.print(value.length());
+      Serial.print(" bytes): ");
       Serial.println(value.c_str());
       
       // Check if we have phase information (starts with O: or N:)
@@ -269,8 +292,19 @@ class CharacteristicCallbacks: public BLECharacteristicCallbacks {
         // Extract the array part (skip the phase prefix "X:")
         std::string arrayString = value.substr(2);
         
+        // Log the phase and array portion
+        Serial.print("Phase: ");
+        Serial.println(phaseChar);
+        Serial.print("Array portion: ");
+        Serial.println(arrayString.c_str());
+        
         // Process the array string
         if (currentPhase == PHASE_OUTPUT) {
+          // Flash the status LED to visually confirm data received
+          digitalWrite(STATUS_LED_PIN, LOW);
+          delay(50);
+          digitalWrite(STATUS_LED_PIN, HIGH);
+          
           processArrayString(arrayString);
         } else {
           // If not in output phase, lower all dots
@@ -289,7 +323,13 @@ class CharacteristicCallbacks: public BLECharacteristicCallbacks {
           Serial.print("Received legacy phase update: ");
           Serial.println(currentPhase == PHASE_OUTPUT ? "OUTPUT" : "NOT OUTPUT");
         } else {
-          Serial.println("Invalid data format - expected O: or N: prefix");
+          // Try to be more forgiving with invalid formats
+          Serial.println("Invalid format - trying to process as array data anyway");
+          if (value.find('[') != std::string::npos) {
+            processArrayString(value);
+          } else {
+            Serial.println("Cannot process data: no valid array format detected");
+          }
         }
       }
     }

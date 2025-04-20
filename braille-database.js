@@ -88,12 +88,44 @@ class BrailleDatabase {
         if (!arrayStr) return null;
         
         try {
-            // Parse JSON directly - all arrays now use the same double-nested format:
+            // Clean and fix common formatting issues in array strings
+            let cleanArrayStr = arrayStr.trim();
+            
+            // Log problematic data for debugging
+            if (cleanArrayStr.includes('[[') && !cleanArrayStr.includes(']]')) {
+                console.log('Fixing malformed array:', cleanArrayStr);
+            }
+            
+            // Fix incomplete arrays like [[1 -> [[1]]
+            if (/\[\[\d+$/.test(cleanArrayStr)) {
+                cleanArrayStr += ']]';
+            }
+            // Fix incomplete arrays like [[1] -> [[1]]
+            else if (/\[\[\d+\]$/.test(cleanArrayStr)) {
+                cleanArrayStr += ']';
+            }
+            
+            // Handle single values that should be in nested array format
+            if (/^\[\d+(,\d+)*\]$/.test(cleanArrayStr)) {
+                // Convert [1,2,3] to [[1,2,3]]
+                cleanArrayStr = '[' + cleanArrayStr + ']';
+            }
+            
+            // Parse JSON - all arrays now use the same double-nested format:
             // [[1,2,3]] for single cell and [[1,2],[3,4]] for multi-cell
-            const parsed = JSON.parse(arrayStr);
+            const parsed = JSON.parse(cleanArrayStr);
             return parsed;
         } catch (e) {
-            console.error('Error parsing array string:', e, arrayStr);
+            // More detailed error logging
+            console.error('Error parsing array string:', e, 'String value:', arrayStr);
+            
+            // Try to salvage single-digit arrays
+            if (/^\[\[?\d\]?\]?$/.test(arrayStr)) {
+                const digit = arrayStr.match(/\d/)[0];
+                const num = parseInt(digit, 10);
+                return [[num]]; // Return in proper nested format
+            }
+            
             return null;
         }
     }
