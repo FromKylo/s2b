@@ -363,6 +363,29 @@ class BrailleTranslation {
             return false;
         }
     }
+
+    /**
+     * Find a word in the braille database
+     * @param {string} word - Word to find
+     * @returns {Object|null} - Matching entry or null if not found
+     */
+    findWordInDatabase(word) {
+        if (!word || typeof word !== 'string') return null;
+        
+        const normalizedWord = word.toLowerCase().trim();
+        
+        // Use the map for faster lookup if available
+        if (this.wordMap && this.wordMap.has(normalizedWord)) {
+            return this.wordMap.get(normalizedWord);
+        }
+        
+        // Fallback to array search if not in map or if map doesn't exist
+        if (this.database) {
+            return this.database.find(entry => entry.word.toLowerCase() === normalizedWord);
+        }
+        
+        return null;
+    }
 }
 
 // Create global instance
