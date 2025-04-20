@@ -1,54 +1,64 @@
-const CACHE_NAME = 'speech-to-braille-v1';
-
-// Only include resources that actually exist
-const urlsToCache = [
+const CACHE_NAME = 's2b-cache-v1';
+const ASSETS_TO_CACHE = [
     '/',
     '/index.html',
-    '/style.css',
-    '/script.js',
-    '/braille-database.js',
-    '/braille-database.csv',
-    '/manifest.json'
-    // Removed missing icon files
+    '/css/styles.css',
+    '/js/app.js',
+    '/js/ble.js',
+    '/js/braille.js',
+    '/js/speech.js',
+    '/manifest.json',
+    '/braille-database.csv'
 ];
 
-// Install event - cache resources
+// Install event - cache static assets
 self.addEventListener('install', event => {
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then(cache => {
-                console.log('Opened cache');
-                return cache.addAll(urlsToCache);
+                console.log('Caching app assets');
+                return cache.addAll(ASSETS_TO_CACHE);
             })
-            .catch(error => {
-                console.error('Cache installation failed:', error);
-                // Continue with installation even if caching fails
-                return Promise.resolve();
-            })
+            .then(() => self.skipWaiting())
     );
 });
 
-// Fetch event - serve from cache when possible
+// Activate event - clean up old caches
+self.addEventListener('activate', event => {
+    event.waitUntil(
+        caches.keys().then(cacheNames => {
+            return Promise.all(
+                cacheNames.map(cache => {
+                    if (cache !== CACHE_NAME) {
+                        console.log('Clearing old cache:', cache);
+                        return caches.delete(cache);
+                    }
+                })
+            );
+        })
+    );
+    return self.clients.claim();
+});
+
+// Fetch event - serve from cache, fall back to network
 self.addEventListener('fetch', event => {
-    // Skip chrome-extension URLs which can't be cached
-    if (event.request.url.startsWith('chrome-extension://')) {
+    // Skip BLE requests (which can't be cached)
+    if (event.request.url.includes('bluetooth')) {
         return;
     }
-
+    
     event.respondWith(
         caches.match(event.request)
-            .then(response => {
-                // Cache hit - return response
-                if (response) {
-                    return response;
+            .then(cachedResponse => {
+                // Return cached response if found
+                if (cachedResponse) {
+                    return cachedResponse;
                 }
                 
-                // Clone the request
-                const fetchRequest = event.request.clone();
-                
-                return fetch(fetchRequest)
+                // Otherwise fetch from network
+                return fetch(event.request)
                     .then(response => {
-                        // Check if valid response
+                        // Don't cache if not a valid response
                         if (!response || response.status !== 200 || response.type !== 'basic') {
                             return response;
                         }
@@ -56,50 +66,18 @@ self.addEventListener('fetch', event => {
                         // Clone the response
                         const responseToCache = response.clone();
                         
-                        // Don't try to cache chrome-extension URLs
-                        if (!event.request.url.startsWith('chrome-extension://')) {
-                            caches.open(CACHE_NAME)
-                                .then(cache => {
-                                    cache.put(event.request, responseToCache);
-                                })
-                                .catch(err => {
-                                    console.error('Error caching response:', err);
-                                });
-                        }
+                        // Add to cache for future use
+                        caches.open(CACHE_NAME)
+                            .then(cache => {
+                                cache.put(event.request, responseToCache);
+                            });
                             
                         return response;
                     })
-                    .catch(() => {
-                        // Return a fallback page for navigation requests
-                        if (event.request.mode === 'navigate') {
-                            return caches.match('/index.html');
-                        }
-                        
-                        return new Response('Network error occurred', {
-                            status: 503,
-                            statusText: 'Service Unavailable',
-                            headers: new Headers({
-                                'Content-Type': 'text/plain'
-                            })
-                        });
+                    .catch(error => {
+                        console.error('Fetch failed:', error);
+                        // Could return a custom offline page here
                     });
             })
-    );
-});
-
-// Activate event - clean up old caches
-self.addEventListener('activate', event => {
-    const cacheWhitelist = [CACHE_NAME];
-    
-    event.waitUntil(
-        caches.keys().then(cacheNames => {
-            return Promise.all(
-                cacheNames.map(cacheName => {
-                    if (cacheWhitelist.indexOf(cacheName) === -1) {
-                        return caches.delete(cacheName);
-                    }
-                })
-            );
-        })
     );
 });
