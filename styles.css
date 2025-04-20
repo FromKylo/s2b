@@ -471,3 +471,69 @@ button {
         margin-bottom: 150px;
     }
 }
+
+/* Add these styles to enhance word detection feedback */
+
+.word-found-indicator {
+    background-color: rgba(40, 167, 69, 0.2);
+    border: 1px solid rgba(40, 167, 69, 0.5);
+    border-radius: 4px;
+    padding: 5px 10px;
+    margin: 10px 0;
+    color: #155724;
+    animation: flash 1s ease-in-out;
+    text-align: center;
+}
+
+.word-info {
+    font-size: 0.85rem;
+    color: var(--secondary-color);
+    margin-top: 5px;
+}
+
+.word-language {
+    display: inline-block;
+    background-color: var(--primary-color);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.75rem;
+}
+
+@keyframes flash {
+    0% { background-color: rgba(40, 167, 69, 0.8); }
+    100% { background-color: rgba(40, 167, 69, 0.2); }
+}
+
+/* Make recognized word display more prominent */
+.recognized-word {
+    font-size: 2rem;
+    font-weight: bold;
+    margin: 20px 0 10px;
+    padding: 10px;
+    background-color: rgba(0, 123, 255, 0.1);
+    border-radius: 5px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* Improve feedback for speech results */
+.speech-result {
+    min-height: 24px;
+    margin: 15px 0;
+    padding: 8px;
+    border-radius: 4px;
+    background-color: rgba(0, 0, 0, 0.05);
+    transition: background-color 0.3s;
+}
+
+.speech-result:not(:empty) {
+    background-color: rgba(0, 123, 255, 0.1);
+}
+
+.speech-result.final:not(:empty) {
+    font-weight: bold;
+    color: var(--primary-color);
+    background-color: rgba(0, 123, 255, 0.2);
+}

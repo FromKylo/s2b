@@ -205,31 +205,55 @@ class SpeechToBrailleApp {
             this.animateAudioWave(true);
             this.updateAudioLevel();
             
-            // Check if we have a braille match for the interim result
-            const words = result.toLowerCase().split(' ');
-            const lastWord = words[words.length - 1];
+            // Words are now handled by the dedicated word detection callback
+            // so we don't need to extract words here
+        });
+        
+        // Handle word detection (both interim and final)
+        speechRecognition.setOnWordDetected((word, confidence, isFinal) => {
+            console.log(`Word detected: "${word}" (${isFinal ? 'final' : 'interim'}) with confidence ${confidence}`);
             
-            if (lastWord && lastWord.length > 1) {
-                const pattern = brailleTranslation.translateWord(lastWord);
+            // Only process words with sufficient length and confidence
+            if (word.length >= 2) {
+                // Try to find a match in the braille database
+                const pattern = brailleTranslation.translateWord(word);
+                
                 if (pattern) {
-                    this.log(`Found braille match for interim word: ${lastWord}`);
-                    this.transitionToOutputPhase(lastWord, pattern);
+                    this.log(`Found braille match for ${isFinal ? 'final' : 'interim'} word: ${word} (confidence: ${confidence.toFixed(2)})`);
+                    
+                    // Display the detected word and its confidence
+                    this.elements.finalResult.textContent = `Detected: ${word} (${(confidence * 100).toFixed(0)}%)`;
+                    
+                    // Visual feedback for match found
+                    this.flashWordFound(word);
+                    
+                    // Transition to output phase
+                    this.transitionToOutputPhase(word, pattern);
                 }
             }
         });
         
         // Handle final results
-        speechRecognition.setOnFinalResult((result) => {
+        speechRecognition.setOnFinalResult((result, confidence) => {
             this.elements.finalResult.textContent = result;
             
-            // Check for braille matches in final result
-            const words = result.toLowerCase().split(' ');
-            const lastWord = words[words.length - 1];
+            // Process individual words from final result
+            const words = speechRecognition.extractWords(result);
             
-            if (lastWord) {
+            if (words.length > 0) {
+                // Process the last word from the final result
+                const lastWord = words[words.length - 1];
+                
+                // Try to find a match in the braille database
                 const pattern = brailleTranslation.translateWord(lastWord);
+                
                 if (pattern) {
-                    this.log(`Found braille match for final word: ${lastWord}`);
+                    this.log(`Found braille match for final word: ${lastWord} (confidence: ${confidence.toFixed(2)})`);
+                    
+                    // Visual feedback for match found
+                    this.flashWordFound(lastWord);
+                    
+                    // Transition to output phase
                     this.transitionToOutputPhase(lastWord, pattern);
                 }
             }
@@ -264,6 +288,30 @@ class SpeechToBrailleApp {
             this.log(`Network status changed to: ${status}`);
             this.updateNetworkStatusUI(status);
         });
+    }
+
+    /**
+     * Visual feedback when a word match is found
+     * @param {string} word - The word that was found
+     */
+    flashWordFound(word) {
+        // Add a flashing highlight to the word
+        const wordIndicator = document.createElement('div');
+        wordIndicator.className = 'word-found-indicator';
+        wordIndicator.textContent = `Match found: "${word}"`;
+        
+        // Append to recording phase content
+        const recordingContent = this.elements.phaseContainers[PHASE.RECORDING].querySelector('.phase-content');
+        if (recordingContent) {
+            recordingContent.appendChild(wordIndicator);
+            
+            // Remove after a short delay
+            setTimeout(() => {
+                if (wordIndicator.parentNode) {
+                    wordIndicator.parentNode.removeChild(wordIndicator);
+                }
+            }, 2000);
+        }
     }
 
     /**
@@ -608,6 +656,12 @@ class SpeechToBrailleApp {
      * @param {Array} pattern - The braille pattern
      */
     transitionToOutputPhase(word, pattern) {
+        // Guard against null patterns
+        if (!pattern) {
+            console.error("Attempted to transition to output phase with null pattern");
+            return;
+        }
+        
         // Clear any existing timers
         if (this.introTimer) clearInterval(this.introTimer);
         if (this.outputTimer) clearInterval(this.outputTimer);
@@ -627,6 +681,15 @@ class SpeechToBrailleApp {
         
         // Display word and pattern
         this.elements.recognizedWord.textContent = word;
+        
+        // Enhance word display with extra information
+        const wordInfo = document.createElement('div');
+        wordInfo.className = 'word-info';
+        wordInfo.innerHTML = `<span class="word-language">${brailleTranslation.currentLanguage}</span>`;
+        this.elements.recognizedWord.appendChild(wordInfo);
+        
+        // Log the pattern for debugging
+        console.log("Braille pattern for output:", pattern);
         
         // Render braille cells
         brailleTranslation.renderBrailleCells(pattern, this.elements.brailleDisplay);

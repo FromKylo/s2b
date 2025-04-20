@@ -24,6 +24,9 @@ class SpeechRecognitionManager {
         this.recoveryAttempts = 0;
         this.maxRecoveryAttempts = 3;
         this.isUsingFallback = false;
+        this.lastProcessedInterim = ''; // Track last processed interim result to avoid duplicates
+        this.confidenceThreshold = 0.5; // Minimum confidence threshold for processing
+        this.minWordLength = 2; // Minimum word length to process
         
         // Listen for network status changes
         window.addEventListener('online', () => this.handleNetworkChange('online'));
@@ -197,17 +200,40 @@ class SpeechRecognitionManager {
             // Process results
             for (let i = event.resultIndex; i < event.results.length; i++) {
                 const transcript = event.results[i][0].transcript.trim();
+                const confidence = event.results[i][0].confidence;
                 
                 if (event.results[i].isFinal) {
                     final = transcript;
                     this.finalResult = transcript;
-                    console.log('Final result:', final);
+                    console.log('Final result:', final, 'Confidence:', confidence);
                     
                     if (this.onFinalResultCallback) {
-                        this.onFinalResultCallback(final);
+                        this.onFinalResultCallback(final, confidence);
                     }
                 } else {
                     interim = transcript;
+                    
+                    // Process individual words from interim results immediately
+                    // This is key for better real-time word detection
+                    if (interim !== this.lastProcessedInterim && confidence >= this.confidenceThreshold) {
+                        this.lastProcessedInterim = interim;
+                        
+                        // Extract individual words for processing
+                        const words = this.extractWords(interim);
+                        if (words.length > 0) {
+                            const lastWord = words[words.length - 1];
+                            
+                            // Only process words that are complete enough
+                            if (lastWord && lastWord.length >= this.minWordLength) {
+                                console.log('Potential interim word:', lastWord, 'Confidence:', confidence);
+                                
+                                // Use a separate callback for individual words
+                                if (this.onWordDetectedCallback) {
+                                    this.onWordDetectedCallback(lastWord, confidence, false); // false = interim
+                                }
+                            }
+                        }
+                    }
                 }
             }
             
@@ -229,6 +255,51 @@ class SpeechRecognitionManager {
         });
         
         return true;
+    }
+
+    /**
+     * Extract individual words from a transcript
+     * @param {string} text - The text to extract words from
+     * @returns {Array} - Array of individual words
+     */
+    extractWords(text) {
+        if (!text) return [];
+        
+        // Remove punctuation and split by whitespace
+        return text.toLowerCase()
+            .replace(/[.,!?;:]/g, '')
+            .split(/\s+/)
+            .filter(word => word.length > 0);
+    }
+
+    /**
+     * Set callback for individual word detection
+     * @param {Function} callback - Function to call when a word is detected
+     */
+    setOnWordDetected(callback) {
+        this.onWordDetectedCallback = callback;
+    }
+
+    /**
+     * Analyze interim result to extract meaningful words
+     * This helps with more accurate word detection from partial speech
+     * @param {string} text - The interim text to analyze
+     * @returns {Array} - Array of potential complete words
+     */
+    analyzeInterimResult(text) {
+        if (!text) return [];
+        
+        const words = this.extractWords(text);
+        const potentialWords = [];
+        
+        // Filter for words that are likely complete
+        for (const word of words) {
+            if (word.length >= this.minWordLength) {
+                potentialWords.push(word);
+            }
+        }
+        
+        return potentialWords;
     }
 
     /**
