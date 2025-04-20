@@ -8,7 +8,8 @@
 const PHASE = {
     INTRODUCTION: 'introduction',
     RECORDING: 'recording',
-    OUTPUT: 'output'
+    OUTPUT: 'output',
+    PERMISSION: 'permission'
 };
 
 class SpeechToBrailleApp {
@@ -20,6 +21,7 @@ class SpeechToBrailleApp {
         this.countdownValue = 8; // seconds
         this.isPressToTalk = false; // Whether we're using press-to-talk mode
         this.isMobileDevice = this.checkIfMobile();
+        this.isRunningTest = false;
         
         // DOM elements
         this.elements = {
@@ -27,6 +29,7 @@ class SpeechToBrailleApp {
                 [PHASE.INTRODUCTION]: document.getElementById('introduction-phase'),
                 [PHASE.RECORDING]: document.getElementById('recording-phase'),
                 [PHASE.OUTPUT]: document.getElementById('output-phase'),
+                [PHASE.PERMISSION]: document.getElementById('permission-phase'),
             },
             bleStatus: document.getElementById('ble-status'),
             connectButton: document.getElementById('connect-ble'),
@@ -43,9 +46,10 @@ class SpeechToBrailleApp {
             finalResult: document.getElementById('final-result'),
             recognizedWord: document.getElementById('recognized-word'),
             brailleDisplay: document.getElementById('braille-display'),
-            audioWave: document.querySelector('.audio-wave')
+            audioWave: document.querySelector('.audio-wave'),
+            permissionStatus: document.querySelector('.permission-status'),
+            grantPermissionButton: document.getElementById('grant-permission')
         };
-        
         
         // Add mobile-specific UI elements
         if (this.isMobileDevice) {
@@ -400,6 +404,13 @@ class SpeechToBrailleApp {
                 }
             }
         });
+        
+        // Grant permission button (if exists)
+        if (this.elements.grantPermissionButton) {
+            this.elements.grantPermissionButton.addEventListener('click', () => {
+                this.requestMicrophonePermission();
+            });
+        }
     }
 
     /**
@@ -613,78 +624,135 @@ class SpeechToBrailleApp {
      * @param {Array} pattern - The braille pattern
      */
     transitionToOutputPhase(word, pattern) {
+        // Debug logging for troubleshooting
+        this.log(`BEGIN OUTPUT PHASE TRANSITION for word: "${word}"`, 'debug');
+        
         // Guard against null patterns
         if (!pattern) {
+            this.log("ERROR: Null pattern provided to output phase", 'error');
             console.error("Attempted to transition to output phase with null pattern");
             return;
         }
         
+        this.log(`Pattern details: ${JSON.stringify(pattern)}`, 'debug');
+        
         // Clear any existing timers
-        if (this.introTimer) clearInterval(this.introTimer);
-        if (this.outputTimer) clearInterval(this.outputTimer);
+        if (this.introTimer) {
+            clearInterval(this.introTimer);
+            this.log("Intro timer cleared", 'debug');
+        }
+        if (this.outputTimer) {
+            clearInterval(this.outputTimer);
+            this.log("Output timer cleared", 'debug');
+        }
         
         // Stop speech recognition temporarily
         speechRecognition.stopListening();
+        this.log("Speech recognition stopped for output phase", 'debug');
         
         // Play output sound
         if (pattern) {
-            this.sounds.outputSuccess.play().catch(e => console.log('Error playing sound:', e));
+            this.sounds.outputSuccess.play().catch(e => {
+                this.log(`Error playing success sound: ${e}`, 'error');
+                console.log('Error playing sound:', e);
+            });
+            this.log("Output success sound played", 'debug');
         } else {
-            this.sounds.outputFailure.play().catch(e => console.log('Error playing sound:', e));
+            this.sounds.outputFailure.play().catch(e => {
+                this.log(`Error playing failure sound: ${e}`, 'error');
+                console.log('Error playing sound:', e);
+            });
+            this.log("Output failure sound played", 'debug');
         }
         
         // Switch to output phase
+        this.log(`Switching to OUTPUT phase`, 'debug');
         this.switchPhase(PHASE.OUTPUT);
         
         // Display word and pattern
         this.elements.recognizedWord.textContent = word;
+        this.log(`Word text set in UI: "${word}"`, 'debug');
         
         // Enhance word display with extra information
         const wordInfo = document.createElement('div');
         wordInfo.className = 'word-info';
         wordInfo.innerHTML = `<span class="word-language">${brailleTranslation.currentLanguage}</span>`;
         this.elements.recognizedWord.appendChild(wordInfo);
+        this.log(`Word language info added: ${brailleTranslation.currentLanguage}`, 'debug');
         
         // Log the pattern for debugging
         console.log("Braille pattern for output:", pattern);
         
+        // Create debug information section in output display
+        const debugInfo = document.createElement('div');
+        debugInfo.className = 'debug-info';
+        debugInfo.innerHTML = `
+            <div class="debug-label">Pattern Data:</div>
+            <pre>${JSON.stringify(pattern, null, 2)}</pre>
+        `;
+        this.elements.brailleDisplay.appendChild(debugInfo);
+        
         // Render braille cells
+        this.log(`Rendering braille pattern to display`, 'debug');
         brailleTranslation.renderBrailleCells(pattern, this.elements.brailleDisplay);
         
         // Send to BLE device if connected
         if (bleConnection.isConnected) {
-            bleConnection.sendBraillePattern(pattern);
+            this.log(`Sending pattern to BLE device...`, 'debug');
+            bleConnection.sendBraillePattern(pattern)
+                .then(() => {
+                    this.log(`Pattern successfully sent to BLE device`, 'success');
+                })
+                .catch(error => {
+                    this.log(`ERROR sending pattern to BLE: ${error.message}`, 'error');
+                });
+        } else {
+            this.log(`Not sending to BLE - device not connected`, 'warning');
         }
         
         // Speak the word
         speechRecognition.speak(word, { rate: 1.0 });
+        this.log(`TTS started for word: "${word}"`, 'debug');
         
         // Reset countdown
         this.countdownValue = 8;
         this.elements.outputCountdown.textContent = this.countdownValue;
+        this.log(`Output countdown reset to ${this.countdownValue}`, 'debug');
         
         // Start countdown
+        this.log(`Starting output countdown timer`, 'debug');
         this.outputTimer = setInterval(() => {
             this.countdownValue--;
             this.elements.outputCountdown.textContent = this.countdownValue;
             
             if (this.countdownValue <= 0) {
+                this.log(`Output countdown reached zero, cleaning up...`, 'debug');
                 clearInterval(this.outputTimer);
                 
                 // Clear BLE display if connected
                 if (bleConnection.isConnected) {
-                    bleConnection.clearDisplay();
+                    this.log(`Clearing BLE display...`, 'debug');
+                    bleConnection.clearDisplay()
+                        .then(() => {
+                            this.log(`BLE display cleared successfully`, 'success');
+                        })
+                        .catch(error => {
+                            this.log(`Error clearing BLE display: ${error.message}`, 'error');
+                        });
                 }
                 
+                this.log(`Transitioning back to recording phase`, 'debug');
                 this.transitionToRecordingPhase();
             }
         }, 1000);
+        
+        this.log(`OUTPUT PHASE TRANSITION COMPLETE`, 'debug');
     }
 
     /**
      * Switch to a different phase
      * @param {string} phase - The phase to switch to
-     */
+     */ 
     switchPhase(phase) {
         // Remove active class from all phases
         Object.values(this.elements.phaseContainers).forEach(container => {
@@ -741,13 +809,13 @@ class SpeechToBrailleApp {
         } else {
             levelBar.style.width = '0%';
         }
-    }
+    } 
 
     /**
      * Update the BLE status indicator
      * @param {string} status - Status class (connected, disconnected, connecting)
      * @param {string} text - Status text to display
-     */
+     */ 
     updateBLEStatus(status, text) {
         this.elements.bleStatus.className = `status-indicator ${status}`;
         this.elements.bleStatus.querySelector('.status-text').textContent = text;
@@ -762,7 +830,7 @@ class SpeechToBrailleApp {
 
     /**
      * Run a braille test sequence
-     */
+     */ 
     async runBrailleTest() {
         this.log('Starting braille test sequence');
         
@@ -804,11 +872,11 @@ class SpeechToBrailleApp {
             return null;
         }
     }
-
+ 
     /**
      * Display database search result in the UI
      * @param {Object} result - The database search result
-     */
+     */ 
     displayDatabaseResult(result, searchTerm) {
         // Create or get result container
         let resultContainer = document.getElementById('db-search-result');
@@ -866,10 +934,16 @@ class SpeechToBrailleApp {
             }
             
             try {
-                // Use encoder to convert the string to bytes and send directly
-                const encoder = new TextEncoder();
-                await bleConnection.characteristic.writeValue(encoder.encode(command));
+                // Add detailed logging before sending
+                this.log(`Sending ${command.startsWith('O:') ? 'OUTPUT' : 'CLEAR'} command to device...`, 'debug');
+                this.log(`Command data: ${command}`, 'debug');
+                
+                // Send the command
+                await bleConnection.sendData(command);
                 this.log('Command sent successfully', 'success');
+                
+                // Show current phase for debugging
+                this.log(`Current phase: ${this.currentPhase}`, 'debug');
             } catch (error) {
                 this.log(`Error sending command: ${error.message}`, 'error');
             }
@@ -896,17 +970,60 @@ class SpeechToBrailleApp {
                     return;
                 }
                 
-                // Create direct pin command and send it
+                // Create direct pin command and send it using sendData
                 const pinCommand = `P:${cell},${pin},${value}`;
-                const encoder = new TextEncoder();
-                await bleConnection.characteristic.writeValue(encoder.encode(pinCommand));
+                await bleConnection.sendData(pinCommand);
                 this.log(`Set cell ${cell} pin ${pin} to ${value}`, 'success');
             } catch (error) {
                 this.log(`Error sending pin command: ${error.message}`, 'error');
             }
         }
-        // NEW CODE: Test Braille Commands
+        else if (command.toLowerCase().startsWith('debug:')) {
+            // Debug specific commands
+            const debugParam = command.substring(6).trim().toLowerCase();
+            
+            if (debugParam === 'phase') {
+                // Show current application phase state
+                this.log(`Current phase: ${this.currentPhase}`, 'info');
+                this.log(`Containers active states:`, 'info');
+                
+                // Inspect phase containers
+                Object.keys(this.elements.phaseContainers).forEach(phase => {
+                    const container = this.elements.phaseContainers[phase];
+                    if (container) {
+                        this.log(`- ${phase}: ${container.classList.contains('active') ? 'ACTIVE' : 'inactive'}`, 'debug');
+                    }
+                });
+            }
+            else if (debugParam === 'output') {
+                // Debug output phase specifically
+                this.log('Output Phase Debug Information:', 'info');
+                this.log(`Current countdown value: ${this.countdownValue}`, 'debug');
+                this.log(`Output timer active: ${this.outputTimer !== null}`, 'debug');
+                this.log(`BLE connected: ${bleConnection.isConnected}`, 'debug');
+                this.log(`Current word displayed: "${this.elements.recognizedWord.textContent}"`, 'debug');
+                this.log(`Current display element contents: ${this.elements.brailleDisplay.children.length} cells`, 'debug');
+            }
+            else if (debugParam.startsWith('simulate')) {
+                // Simulate output phase with test data
+                const word = debugParam.split(':')[1] || 'test';
+                this.log(`Simulating output phase with word: "${word}"`, 'info');
+                
+                // Find pattern for word
+                const pattern = brailleTranslation.translateWord(word);
+                if (pattern) {
+                    this.transitionToOutputPhase(word, pattern);
+                } else {
+                    this.log(`No pattern found for word: ${word}`, 'error');
+                }
+            }
+            else {
+                this.log(`Unknown debug command: ${debugParam}`, 'error');
+                this.log(`Available debug commands: phase, output, simulate:word`, 'info');
+            }
+        }
         else if (command.toLowerCase().startsWith('test:')) {
+            // Test commands
             const testParam = command.substring(5).trim().toLowerCase();
             
             if (!testParam) {
@@ -951,7 +1068,7 @@ class SpeechToBrailleApp {
                     }
                     
                     this.log('Numbers test complete', 'success');
-                }
+                } 
                 else {
                     // Test a single character or word
                     const pattern = brailleTranslation.translateWord(testParam);
@@ -979,13 +1096,43 @@ class SpeechToBrailleApp {
                         }
                     } else {
                         this.log(`No pattern found for: ${testParam}`, 'error');
+                        
+                        // Try to be more helpful with suggestions
+                        this.log(`Trying to find alternative options...`, 'info');
+                        
+                        // Try letter by letter if it's a multi-character word
+                        if (testParam.length > 1) {
+                            this.log(`Breaking down "${testParam}" into individual letters:`, 'info');
+                            let foundAny = false;
+                            
+                            for (const letter of testParam) {
+                                const letterPattern = brailleTranslation.translateWord(letter);
+                                if (letterPattern) {
+                                    foundAny = true;
+                                    this.log(`- Letter "${letter}" found in database`, 'success');
+                                } else {
+                                    this.log(`- Letter "${letter}" not found in database`, 'warning');
+                                }
+                            }
+                            
+                            if (foundAny) {
+                                this.log(`Tip: Try testing individual letters (e.g., test:${testParam[0]})`, 'info');
+                            }
+                        }
+                        
+                        // Suggest using the search command for more details
+                        this.log(`Tip: Use 'search:${testParam}' to search the database with more details`, 'info');
+                        
+                        // Try to find similar words as suggestions
+                        const languages = brailleTranslation.getLanguages();
+                        this.log(`Currently using language: ${brailleTranslation.currentLanguage}`, 'info');
+                        this.log(`Try switching language with 'language:[${languages.join('|')}]'`, 'info');
                     }
                 }
             } catch (error) {
                 this.log(`Test error: ${error.message}`, 'error');
             }
         }
-        // NEW CODE: Database Search Command
         else if (command.toLowerCase().startsWith('search:')) {
             const searchTerm = command.substring(7).trim();
             
@@ -1011,6 +1158,7 @@ class SpeechToBrailleApp {
                         </ul>
                     </div>
                 `;
+                
                 container.innerHTML = resultHTML;
                 
                 // Add braille pattern visualization
@@ -1036,7 +1184,6 @@ class SpeechToBrailleApp {
                 this.log(`No database entry found for: ${searchTerm}`, 'error');
             }
         }
-        // NEW CODE: Language Selection Command
         else if (command.toLowerCase().startsWith('language:')) {
             const language = command.substring(9).trim();
             
@@ -1069,6 +1216,9 @@ class SpeechToBrailleApp {
                         <li><code>test:numbers</code> - Test all number representations</li>
                         <li><code>search:word</code> - Search database for a word</li>
                         <li><code>language:X</code> - Set or view language (e.g., language:UEB)</li>
+                        <li><code>debug:phase</code> - Show current app phase state</li>
+                        <li><code>debug:output</code> - Show output phase debug info</li>
+                        <li><code>debug:simulate:word</code> - Simulate output phase with word</li>
                         <li><code>clear</code> - Clear the console</li>
                         <li><code>help</code> - Show this help text</li>
                     </ul>
@@ -1114,18 +1264,38 @@ class SpeechToBrailleApp {
     /**
      * Add a log message to the debug console
      * @param {string} message - The message to log
-     * @param {string} type - Log type (info, error, warning)
+     * @param {string} type - Log type (info, error, warning, debug)
      */
     log(message, type = 'info') {
         const timestamp = new Date().toLocaleTimeString();
         const logElement = document.createElement('div');
         logElement.className = `log-entry ${type}`;
-        logElement.innerHTML = `<span class="timestamp">[${timestamp}]</span> ${message}`;
+        
+        // For debug messages, add detailed timestamp with milliseconds
+        if (type === 'debug') {
+            const detailedTime = new Date().toISOString().split('T')[1].split('Z')[0];
+            logElement.innerHTML = `<span class="timestamp">[${detailedTime}]</span> ${message}`;
+        } else {
+            logElement.innerHTML = `<span class="timestamp">[${timestamp}]</span> ${message}`;
+        }
         
         this.elements.debugOutput.appendChild(logElement);
         this.elements.debugOutput.scrollTop = this.elements.debugOutput.scrollHeight;
         
-        console.log(`[${type}] ${message}`);
+        // Also log to console with appropriate method
+        switch(type) {
+            case 'error':
+                console.error(`[${type}] ${message}`);
+                break;
+            case 'warning':
+                console.warn(`[${type}] ${message}`);
+                break;
+            case 'debug':
+                console.debug(`[${type}] ${message}`);
+                break;
+            default:
+                console.log(`[${type}] ${message}`);
+        }
     }
 
     /**
@@ -1180,6 +1350,7 @@ class SpeechToBrailleApp {
             clearCacheBtn.addEventListener('click', () => {
                 if (brailleTranslation.clearCache()) {
                     this.log('Braille database cache cleared', 'success');
+                    
                     // Reload database
                     brailleTranslation.initialize().then(success => {
                         if (success) {
@@ -1197,7 +1368,7 @@ class SpeechToBrailleApp {
         // Add database search UI to debug console
         this.createDatabaseSearchUI();
     }
-    
+
     /**
      * Create UI elements for database search
      */
