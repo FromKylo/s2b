@@ -88,31 +88,10 @@ class BrailleDatabase {
         if (!arrayStr) return null;
         
         try {
-            // Handle nested arrays like {{1,2},{3,4}}
-            if (arrayStr.startsWith('{{')) {
-                const cellsStr = arrayStr.slice(2, -2).split('},{');
-                return cellsStr.map(cell => 
-                    cell.split(',')
-                        .filter(num => num.trim() !== '') // Filter out empty entries
-                        .map(num => {
-                            const parsed = parseInt(num, 10);
-                            return isNaN(parsed) ? null : parsed;
-                        })
-                        .filter(num => num !== null) // Remove invalid numbers
-                );
-            } 
-            // Handle single arrays like {1,2,3}
-            else if (arrayStr.startsWith('{')) {
-                const numsStr = arrayStr.slice(1, -1).split(',');
-                return numsStr
-                    .filter(num => num.trim() !== '') // Filter out empty entries
-                    .map(num => {
-                        const parsed = parseInt(num, 10);
-                        return isNaN(parsed) ? null : parsed;
-                    })
-                    .filter(num => num !== null); // Remove invalid numbers
-            }
-            return null;
+            // Parse JSON directly - all arrays now use the same double-nested format:
+            // [[1,2,3]] for single cell and [[1,2],[3,4]] for multi-cell
+            const parsed = JSON.parse(arrayStr);
+            return parsed;
         } catch (e) {
             console.error('Error parsing array string:', e, arrayStr);
             return null;
