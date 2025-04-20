@@ -42,14 +42,69 @@ let isUsingVosk = false; // Flag for alternate speech recognition
  * Initialize the application
  */
 async function initApp() {
-    // Load braille database
-    await brailleDB.loadDatabase();
+    // Load braille database with logging to diagnose loading issues
+    console.log("Starting database load...");
+    try {
+        const loadSuccess = await brailleDB.loadDatabase();
+        console.log(`Database load ${loadSuccess ? 'successful' : 'failed'}`);
+        console.log(`Database entries loaded: ${brailleDB.database.length}`);
+        console.log(`Word map entries: ${brailleDB.wordMap.size}`);
+        
+        // Force load of the braille_data.json as a fallback if CSV loading fails
+        if (brailleDB.database.length < 10) {
+            console.warn("Few database entries loaded, attempting fallback load from braille_data.json");
+            await loadBrailleDataFallback();
+        }
+    } catch (err) {
+        console.error("Error during database load:", err);
+        // Try fallback loading
+        await loadBrailleDataFallback();
+    }
     
     // Setups
     setupAudioVisualization();
     setupSpeechRecognition();
     setupTextToSpeech();
     startIntroductionPhase();
+}
+
+/**
+ * Fallback loader for braille data from JSON file
+ */
+async function loadBrailleDataFallback() {
+    try {
+        console.log("Attempting to load braille data from JSON fallback...");
+        const response = await fetch('braille_data.json');
+        if (!response.ok) {
+            throw new Error(`Failed to load fallback database: ${response.status}`);
+        }
+        
+        const jsonData = await response.json();
+        console.log(`Loaded ${jsonData.length} entries from fallback JSON`);
+        
+        // Populate the database
+        brailleDB.database = jsonData.map(entry => {
+            // Convert to proper format if needed
+            const formattedEntry = {
+                word: entry.word,
+                shortf: entry.shortf || entry.word.substring(0, 2),
+                braille: entry.braille || '',
+                array: Array.isArray(entry.array[0]) ? entry.array : [entry.array],
+                lang: entry.lang || 'UEB'
+            };
+            
+            // Add to word map for faster lookups
+            brailleDB.wordMap.set(formattedEntry.word.toLowerCase(), formattedEntry);
+            return formattedEntry;
+        });
+        
+        brailleDB.loaded = true;
+        console.log(`Database fallback load successful: ${brailleDB.database.length} entries`);
+        return true;
+    } catch (error) {
+        console.error('Error loading fallback braille database:', error);
+        return false;
+    }
 }
 
 /**
@@ -70,78 +125,52 @@ function setupSpeechRecognition() {
         
         recognition.onresult = (event) => {
             let interim = '';
+            let lastInterimWord = '';
+            
             for (let i = event.resultIndex; i < event.results.length; i++) {
+                // Handle final results
                 if (event.results[i].isFinal) {
                     // Get the complete recognized text
                     const recognizedText = event.results[i][0].transcript.trim();
-                    // Add to transcript
+                    
+                    // Add to full transcript
                     currentTranscript += recognizedText + ' ';
                     
-                    // Split into individual words for matching
-                    const words = recognizedText.toLowerCase().split(/\s+/);
+                    // Make sure we don't process the same word that was already processed as interim
+                    if (lastInterimWord) {
+                        const words = recognizedText.toLowerCase().split(/\s+/);
+                        if (words[words.length - 1] === lastInterimWord.toLowerCase()) {
+                            console.log(`Skipping already processed word: ${lastInterimWord}`);
+                            lastInterimWord = '';
+                            continue;
+                        }
+                    }
                     
-                    // Only process the last word in the phrase
-                    if (words.length > 0) {
-                        const lastWord = words[words.length - 1];
-                        if (lastWord) {
-                            // Verify database is loaded
-                            if (!brailleDB.loaded) {
-                                console.warn('Cannot process word: Braille database not loaded');
-                                continue;
-                            }
-                            
-                            // Debug logging - BEFORE findWord call
-                            console.group(`Debug findWord("${lastWord}")`);
-                            console.log("Database loaded:", brailleDB.loaded);
-                            console.log("Database entries:", brailleDB.database.length);
-                            console.log("Word map entries:", brailleDB.wordMap.size);
-                            
-                            // Try to find a match for this specific word
-                            const match = brailleDB.findWord(lastWord);
-                            
-                            // Debug logging - AFTER findWord call
-                            console.log("Search result:", match);
-                            console.groupEnd();
-                            
-                            if (match) {
-                                console.log(`Found match for last word: ${lastWord}`, match);
-                                // Display this specific match
-                                displayBrailleOutput([match]);
-                                
-                                // Send to BLE if connected
-                                if (window.bleHandler && window.bleHandler.isConnectedToBLE) {
-                                    try {
-                                        window.bleHandler.sendBrailleToBLE(match);
-                                        // Visual feedback that a word was sent
-                                        flashWordSent(lastWord);
-                                    } catch (err) {
-                                        console.error("BLE transmission error:", err);
-                                    }
-                                }
-                                
-                                // Clear after 8 seconds
-                                setTimeout(() => {
-                                    brailleOutput.innerHTML = '';
-                                }, 8000);
-                            } else {
-                                // Add visual feedback for no match
-                                console.log(`No match found for: ${lastWord}`);
-                                const noMatchElement = document.createElement('div');
-                                noMatchElement.className = 'no-match-feedback';
-                                noMatchElement.textContent = `No braille pattern found for: ${lastWord}`;
-                                noMatchElement.style.color = 'red';
-                                noMatchElement.style.padding = '5px';
-                                noMatchElement.style.margin = '5px 0';
-                                recognizedText.appendChild(noMatchElement);
-                                setTimeout(() => noMatchElement.remove(), 3000);
-                                
-                                // Play no-match audio cue
-                                playAudioCue('no-match');
-                            }
+                    // Process all words in the final result
+                    const words = recognizedText.toLowerCase().split(/\s+/);
+                    for (const word of words) {
+                        if (word && word.length > 0) {
+                            processRecognizedWord(word, true);
                         }
                     }
                 } else {
-                    interim += event.results[i][0].transcript;
+                    // Handle interim results - this is where we want to detect words immediately
+                    const interimText = event.results[i][0].transcript.trim();
+                    interim += interimText + ' ';
+                    
+                    // Extract the last word from interim results
+                    const interimWords = interimText.toLowerCase().split(/\s+/);
+                    const currentInterimWord = interimWords[interimWords.length - 1];
+                    
+                    // Only process if the word is "complete" enough (more than 2 chars and didn't just change)
+                    if (currentInterimWord && 
+                        currentInterimWord.length > 2 &&
+                        currentInterimWord !== lastInterimWord) {
+                            
+                        console.log(`Processing interim word: ${currentInterimWord}`);
+                        lastInterimWord = currentInterimWord;
+                        processRecognizedWord(currentInterimWord, false);
+                    }
                 }
             }
             
@@ -169,6 +198,79 @@ function setupSpeechRecognition() {
     } else {
         recognizedText.innerHTML = '<p>Speech recognition is not supported in this browser.</p>';
         console.error('Speech Recognition API not supported');
+    }
+}
+
+/**
+ * Process a recognized word and display/send braille pattern if found
+ * @param {string} word - The word to process
+ * @param {boolean} isFinal - Whether this is from a final result or interim
+ */
+function processRecognizedWord(word, isFinal) {
+    if (!word || typeof word !== 'string' || word.length === 0) return;
+    
+    // Verify database is loaded
+    if (!brailleDB.loaded) {
+        console.warn('Cannot process word: Braille database not loaded');
+        return;
+    }
+    
+    // Clean the word
+    const cleanWord = word.toLowerCase().trim().replace(/[.,!?;:]/g, '');
+    if (cleanWord.length === 0) return;
+    
+    // Debug logging
+    console.group(`Processing word: "${cleanWord}" (${isFinal ? 'final' : 'interim'})`);
+    console.log("Database entries:", brailleDB.database.length);
+    
+    // Try to find a match for this specific word
+    const match = brailleDB.findWord(cleanWord);
+    console.log("Search result:", match);
+    console.groupEnd();
+    
+    if (match) {
+        console.log(`Found match for word: ${cleanWord}`, match);
+        
+        // Display this specific match
+        displayBrailleOutput([match]);
+        
+        // Send to BLE if connected
+        if (window.bleHandler && window.bleHandler.isConnectedToBLE) {
+            try {
+                window.bleHandler.sendBrailleToBLE(match);
+                // Visual feedback that a word was sent
+                flashWordSent(cleanWord);
+            } catch (err) {
+                console.error("BLE transmission error:", err);
+            }
+        }
+        
+        // Only set up clearance timeout for interim results
+        // Final results are handled differently
+        if (!isFinal) {
+            // Clear after 4 seconds for interim results
+            setTimeout(() => {
+                if (currentPhase === 'recording') {
+                    brailleOutput.innerHTML = '';
+                }
+            }, 4000);
+        }
+    } else if (isFinal) {
+        // Only show no-match feedback for final results
+        console.log(`No match found for: ${cleanWord}`);
+        
+        // Add visual feedback for no match
+        const noMatchElement = document.createElement('div');
+        noMatchElement.className = 'no-match-feedback';
+        noMatchElement.textContent = `No braille pattern found for: ${cleanWord}`;
+        noMatchElement.style.color = 'red';
+        noMatchElement.style.padding = '5px';
+        noMatchElement.style.margin = '5px 0';
+        recognizedText.appendChild(noMatchElement);
+        setTimeout(() => noMatchElement.remove(), 3000);
+        
+        // Play no-match audio cue
+        playAudioCue('no-match');
     }
 }
 
@@ -1070,15 +1172,48 @@ function initBleDebugConsole() {
         }
     });
     
-    // Export debug functions to the global console
+    // Export debug functions to the global console - updated to use brailleCharacteristic directly
     window.bleDebug = {
         log: (message) => logToConsole(message),
         error: (message) => logToConsole(message, '#f00'),
         success: (message) => logToConsole(message, '#0f0'),
         warn: (message) => logToConsole(message, '#ff0'),
-        send: (data) => processCommand(`send:${data}`),
+        send: (data) => {
+            logToConsole(`Sending via bleDebug.send: ${data}`, '#ff0');
+            if (!window.bleHandler?.isConnectedToBLE || !window.bleHandler.brailleCharacteristic) {
+                const errorMsg = 'Cannot send: BLE not connected';
+                logToConsole(errorMsg, '#f00');
+                console.error(errorMsg);
+                return Promise.reject(new Error(errorMsg));
+            }
+            
+            try {
+                const encoder = new TextEncoder();
+                return window.bleHandler.brailleCharacteristic.writeValue(encoder.encode(data))
+                    .then(() => {
+                        logToConsole('Data sent successfully via bleDebug.send', '#0f0');
+                        return true;
+                    })
+                    .catch(err => {
+                        const errorMsg = `Error sending via bleDebug.send: ${err.message}`;
+                        logToConsole(errorMsg, '#f00');
+                        console.error(errorMsg);
+                        throw err;
+                    });
+            } catch (err) {
+                const errorMsg = `Error in bleDebug.send: ${err.message}`;
+                logToConsole(errorMsg, '#f00');
+                console.error(errorMsg);
+                return Promise.reject(err);
+            }
+        },
         toggle: toggleConsole
     };
+    
+    // Initialize brailleCharacteristic reference if BLE is already connected
+    if (window.bleHandler && window.bleHandler.isConnectedToBLE) {
+        logToConsole('BLE already connected, ready to send commands', '#0f0');
+    }
     
     logToConsole('BLE Debug Console initialized. Press F12 to toggle.', '#0f0');
 }

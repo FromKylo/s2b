@@ -3,6 +3,28 @@
  * Manages BLE connections, data transfer, and testing functions
  */
 
+// Ensure bleDebug exists with all necessary functions
+window.bleDebug = window.bleDebug || {
+    log: function(msg) { console.log(msg); },
+    error: function(msg) { console.error(msg); },
+    success: function(msg) { console.log(msg); },
+    warn: function(msg) { console.warn(msg); },
+    send: function(data) {
+        console.log("Sending via BLE Debug:", data);
+        // If the BLE handler is available, try to send the data
+        if (window.bleHandler && window.bleHandler.isConnectedToBLE && window.bleHandler.brailleCharacteristic) {
+            const encoder = new TextEncoder();
+            return window.bleHandler.brailleCharacteristic.writeValue(encoder.encode(data))
+                .then(() => console.log('Data sent successfully via bleDebug!'))
+                .catch(err => console.error('Error sending via bleDebug:', err));
+        } else {
+            console.warn('BLE not connected or characteristic not available');
+            return Promise.reject(new Error('BLE not connected'));
+        }
+    },
+    toggle: function() { console.warn('BLE Debug toggle not fully initialized yet'); }
+};
+
 // BLE Variables
 let bleDevice = null;
 let bleServer = null;
