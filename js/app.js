@@ -866,7 +866,9 @@ class SpeechToBrailleApp {
             }
             
             try {
-                await bleConnection.sendRawCommand(command);
+                // Use encoder to convert the string to bytes and send directly
+                const encoder = new TextEncoder();
+                await bleConnection.characteristic.writeValue(encoder.encode(command));
                 this.log('Command sent successfully', 'success');
             } catch (error) {
                 this.log(`Error sending command: ${error.message}`, 'error');
@@ -894,7 +896,10 @@ class SpeechToBrailleApp {
                     return;
                 }
                 
-                await bleConnection.sendRawCommand(`P:${cell},${pin},${value}`);
+                // Create direct pin command and send it
+                const pinCommand = `P:${cell},${pin},${value}`;
+                const encoder = new TextEncoder();
+                await bleConnection.characteristic.writeValue(encoder.encode(pinCommand));
                 this.log(`Set cell ${cell} pin ${pin} to ${value}`, 'success');
             } catch (error) {
                 this.log(`Error sending pin command: ${error.message}`, 'error');
