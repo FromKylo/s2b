@@ -104,9 +104,6 @@ class BLEConnection {
             this.isConnecting = false;
             this.reconnectAttempts = 0;
             
-            // Send test message to confirm connection
-            await this.sendData('BLE:HELLO');
-            
             if (this.onConnectCallback) this.onConnectCallback();
             
             // Send a specific braille pattern on connect

@@ -9,6 +9,7 @@ const PHASE = {
     INTRODUCTION: 'introduction',
     RECORDING: 'recording',
     OUTPUT: 'output',
+    TEST: 'test', // Added new phase for braille testing
 };
 
 class SpeechToBrailleApp {
@@ -782,23 +783,34 @@ class SpeechToBrailleApp {
     async runBrailleTest() {
         this.log('Starting braille test sequence');
         
-        // Switch to output phase for the test
-        this.switchPhase(PHASE.OUTPUT);
+        // Switch to test phase
+        this.switchPhase(PHASE.TEST);
         
         // Clear any existing timers
         if (this.introTimer) clearInterval(this.introTimer);
         if (this.outputTimer) clearInterval(this.outputTimer);
         
         // Run the test
-        await brailleTranslation.runAlphabetAndNumbersTest(
-            this.elements.brailleDisplay,
-            bleConnection.isConnected ? pattern => bleConnection.sendBraillePattern(pattern) : null
-        );
-        
-        this.log('Braille test sequence completed');
-        
-        // Return to recording phase
-        this.transitionToRecordingPhase();
+        try {
+            await brailleTranslation.runAlphabetAndNumbersTest(
+                this.elements.brailleDisplay,
+                bleConnection.isConnected ? pattern => bleConnection.sendBraillePattern(pattern) : null
+            );
+            this.log('Braille test sequence completed');
+        } catch (error) {
+            console.error('Error during braille test:', error);
+            this.log('Braille test error: ' + error.message, 'error');
+        } finally {
+            // Clear display when done
+            setTimeout(() => {
+                this.elements.brailleDisplay.innerHTML = '';
+            }, 1000);
+
+            // Return to recording phase
+            setTimeout(() => {
+                this.transitionToRecordingPhase();
+            }, 2000);
+        }
     }
 
     /**
@@ -867,45 +879,11 @@ class SpeechToBrailleApp {
         // Add handler for braille test button
         const brailleTestBtn = document.getElementById('braille-test-btn');
         if (brailleTestBtn) {
-            brailleTestBtn.addEventListener('click', async () => {
-                // Check if we're already in a test
-                if (this.isRunningTest) return;
-                
-                this.isRunningTest = true;
-                brailleTestBtn.disabled = true;
-                brailleTestBtn.textContent = 'Running Test...';
-                
-                try {
-                    // Switch to output phase to ensure proper display
-                    this.switchPhase(PHASE.OUTPUT);
-                    
-                    // Run the test
-                    await brailleTranslation.runAlphabetAndNumbersTest(
-                        this.elements.brailleDisplay,
-                        pattern => bleConnection.sendBraillePattern(pattern)
-                    );
-                    
-                    // Clear display when done
-                    setTimeout(() => {
-                        this.elements.brailleDisplay.innerHTML = '';
-                    }, 1000);
-                } catch (error) {
-                    console.error('Error running braille test:', error);
-                    this.log('Braille test error: ' + error.message, 'error');
-                } finally {
-                    // Re-enable button
-                    brailleTestBtn.disabled = false;
-                    brailleTestBtn.textContent = 'Test Braille Display';
-                    this.isRunningTest = false;
-                    
-                    // Return to recording phase
-                    setTimeout(() => {
-                        this.transitionToRecordingPhase();
-                    }, 2000);
-                }
+            brailleTestBtn.addEventListener('click', () => {
+                this.runBrailleTest();
             });
         }
-        
+
         // Add handler for cache management
         const clearCacheBtn = document.getElementById('clear-cache-btn');
         if (clearCacheBtn) {
