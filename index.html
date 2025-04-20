@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#007bff">
     <title>Speech to Braille</title>
     <link rel="stylesheet" href="styles.css">
@@ -58,6 +58,20 @@
                     <!-- Braille cells will be dynamically inserted here -->
                 </div>
                 <div class="countdown-timer">Returning to listening in <span id="output-countdown">8</span> seconds...</div>
+            </div>
+        </div>
+        
+        <!-- Permission Phase - Will be created dynamically if needed -->
+        <div id="permission-phase" class="phase">
+            <div class="phase-content">
+                <h2>Microphone Permission Required</h2>
+                <p>This app needs microphone access to convert your speech to braille.</p>
+                <div class="permission-image">
+                    <!-- Image will be added dynamically or created in images folder -->
+                </div>
+                <p>Please click "Allow" when prompted for microphone access.</p>
+                <button id="grant-permission" class="primary-btn">Enable Microphone</button>
+                <div id="permission-status" class="status-message">Waiting for permission...</div>
             </div>
         </div>
     </main>

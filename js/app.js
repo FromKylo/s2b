@@ -1,13 +1,15 @@
 /**
  * Speech to Braille - Main Application 
  * Controls app phases, UI updates, and integration between modules
+ * Enhanced with mobile-friendly speech recognition controls
  */
 
 // App phases
 const PHASE = {
     INTRODUCTION: 'introduction',
     RECORDING: 'recording',
-    OUTPUT: 'output'
+    OUTPUT: 'output',
+    PERMISSION: 'permission' // New phase for permission handling
 };
 
 class SpeechToBrailleApp {
@@ -17,13 +19,16 @@ class SpeechToBrailleApp {
         this.introTimer = null;
         this.outputTimer = null;
         this.countdownValue = 8; // seconds
+        this.isPressToTalk = false; // Whether we're using press-to-talk mode
+        this.isMobileDevice = this.checkIfMobile();
         
         // DOM elements
         this.elements = {
             phaseContainers: {
                 [PHASE.INTRODUCTION]: document.getElementById('introduction-phase'),
                 [PHASE.RECORDING]: document.getElementById('recording-phase'),
-                [PHASE.OUTPUT]: document.getElementById('output-phase')
+                [PHASE.OUTPUT]: document.getElementById('output-phase'),
+                [PHASE.PERMISSION]: document.getElementById('permission-phase') // Will create this element dynamically if needed
             },
             bleStatus: document.getElementById('ble-status'),
             connectButton: document.getElementById('connect-ble'),
@@ -43,6 +48,16 @@ class SpeechToBrailleApp {
             audioWave: document.querySelector('.audio-wave')
         };
         
+        // Create permission UI if it doesn't exist
+        if (!this.elements.phaseContainers[PHASE.PERMISSION]) {
+            this.createPermissionUI();
+        }
+        
+        // Add mobile-specific UI elements
+        if (this.isMobileDevice) {
+            this.createMobileUI();
+        }
+        
         // Audio feedback sounds
         this.sounds = {
             recordingStart: new Audio('sounds/recording-start.mp3'),
@@ -56,6 +71,91 @@ class SpeechToBrailleApp {
         
         // Bind events
         this.bindEvents();
+    }
+
+    /**
+     * Check if the current device is mobile
+     */
+    checkIfMobile() {
+        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    }
+
+    /**
+     * Create permission request UI
+     */
+    createPermissionUI() {
+        // Create permission phase container if it doesn't exist
+        const permissionPhase = document.createElement('div');
+        permissionPhase.id = 'permission-phase';
+        permissionPhase.className = 'phase';
+        
+        permissionPhase.innerHTML = `
+            <div class="phase-content">
+                <h2>Microphone Permission Required</h2>
+                <p>This app needs microphone access to convert your speech to braille.</p>
+                <div class="permission-image">
+                    <img src="images/mic-permission.png" alt="Microphone permission dialog" />
+                </div>
+                <p>Please click "Allow" when prompted for microphone access.</p>
+                <button id="grant-permission" class="primary-btn">Enable Microphone</button>
+                <div id="permission-status" class="status-message">Waiting for permission...</div>
+            </div>
+        `;
+        
+        // Add it to the document
+        const mainElement = document.querySelector('main');
+        if (mainElement) {
+            mainElement.appendChild(permissionPhase);
+            
+            // Update our elements reference
+            this.elements.phaseContainers[PHASE.PERMISSION] = permissionPhase;
+            this.elements.grantPermissionButton = document.getElementById('grant-permission');
+            this.elements.permissionStatus = document.getElementById('permission-status');
+        }
+    }
+
+    /**
+     * Create mobile-specific UI elements
+     */
+    createMobileUI() {
+        // Create press-to-talk button
+        const talkButton = document.createElement('button');
+        talkButton.id = 'press-to-talk';
+        talkButton.className = 'talk-button';
+        talkButton.innerHTML = '<span>Hold to Talk</span>';
+        
+        // Create audio level indicator
+        const audioLevel = document.createElement('div');
+        audioLevel.id = 'audio-level';
+        audioLevel.className = 'audio-level';
+        audioLevel.innerHTML = '<div class="level-bar"></div>';
+        
+        // Create network status indicator
+        const networkStatus = document.createElement('div');
+        networkStatus.id = 'network-status';
+        networkStatus.className = 'status-indicator online';
+        networkStatus.innerHTML = '<span class="status-dot"></span><span class="status-text">Online</span>';
+        
+        // Add elements to the recording phase
+        const recordingContent = this.elements.phaseContainers[PHASE.RECORDING].querySelector('.phase-content');
+        if (recordingContent) {
+            recordingContent.appendChild(audioLevel);
+            recordingContent.appendChild(talkButton);
+            
+            // Add network status to header
+            const header = document.querySelector('header');
+            if (header) {
+                header.appendChild(networkStatus);
+            }
+        }
+        
+        // Update our elements reference
+        this.elements.talkButton = talkButton;
+        this.elements.audioLevel = audioLevel;
+        this.elements.networkStatus = networkStatus;
+        
+        // Set press-to-talk mode for mobile
+        this.isPressToTalk = true;
     }
 
     /**
@@ -77,8 +177,15 @@ class SpeechToBrailleApp {
             // Set up BLE callbacks
             this.setupBLECallbacks();
             
-            // Start the introduction phase
-            this.startIntroductionPhase();
+            // Check for microphone permission before proceeding
+            const permissionStatus = await speechRecognition.checkMicrophonePermission();
+            if (permissionStatus === 'granted') {
+                // Start the introduction phase if permission is granted
+                this.startIntroductionPhase();
+            } else {
+                // Show permission request UI
+                this.switchPhase(PHASE.PERMISSION);
+            }
             
             // Notify user of initialization status
             this.log('App initialization complete');
@@ -96,6 +203,7 @@ class SpeechToBrailleApp {
         speechRecognition.setOnInterimResult((result) => {
             this.elements.interimResult.textContent = result;
             this.animateAudioWave(true);
+            this.updateAudioLevel();
             
             // Check if we have a braille match for the interim result
             const words = result.toLowerCase().split(' ');
@@ -130,12 +238,31 @@ class SpeechToBrailleApp {
         // Handle start/stop listening
         speechRecognition.setOnStartListening(() => {
             this.animateAudioWave(true);
+            this.updateTalkButtonState(true);
             this.log('Speech recognition started');
         });
         
         speechRecognition.setOnStopListening(() => {
             this.animateAudioWave(false);
+            this.updateTalkButtonState(false);
             this.log('Speech recognition stopped');
+        });
+        
+        // Handle permission changes
+        speechRecognition.setOnPermissionChange((status) => {
+            this.log(`Microphone permission status changed to: ${status}`);
+            this.updatePermissionUI(status);
+            
+            if (status === 'granted' && this.currentPhase === PHASE.PERMISSION) {
+                // If we were waiting for permission and got it, move to intro phase
+                this.startIntroductionPhase();
+            }
+        });
+        
+        // Handle network status changes
+        speechRecognition.setOnNetworkStatusChange((status) => {
+            this.log(`Network status changed to: ${status}`);
+            this.updateNetworkStatusUI(status);
         });
     }
 
@@ -208,6 +335,48 @@ class SpeechToBrailleApp {
             this.runBLESpeedTest();
         });
         
+        // Grant permission button
+        if (this.elements.grantPermissionButton) {
+            this.elements.grantPermissionButton.addEventListener('click', () => {
+                this.requestMicrophonePermission();
+            });
+        }
+        
+        // Press-to-talk button for mobile devices
+        if (this.elements.talkButton) {
+            // Touch events for mobile
+            this.elements.talkButton.addEventListener('touchstart', (e) => {
+                e.preventDefault(); // Prevent default touch behavior
+                this.handlePressTalkStart();
+            });
+            
+            this.elements.talkButton.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                this.handlePressTalkEnd();
+            });
+            
+            // Mouse events for desktop testing
+            this.elements.talkButton.addEventListener('mousedown', () => {
+                this.handlePressTalkStart();
+            });
+            
+            this.elements.talkButton.addEventListener('mouseup', () => {
+                this.handlePressTalkEnd();
+            });
+            
+            // Handle case where user moves finger out of button while pressing
+            this.elements.talkButton.addEventListener('touchcancel', (e) => {
+                e.preventDefault();
+                this.handlePressTalkEnd();
+            });
+            
+            this.elements.talkButton.addEventListener('mouseleave', () => {
+                if (this.isPressToTalk && speechRecognition.isListening) {
+                    this.handlePressTalkEnd();
+                }
+            });
+        }
+        
         // Keyboard shortcuts
         document.addEventListener('keydown', (event) => {
             // F12 to toggle debug console
@@ -226,6 +395,135 @@ class SpeechToBrailleApp {
                 }
             }
         });
+    }
+
+    /**
+     * Handle the start of press-to-talk
+     */
+    handlePressTalkStart() {
+        if (this.currentPhase !== PHASE.RECORDING) return;
+        
+        this.elements.talkButton.classList.add('active');
+        this.elements.talkButton.querySelector('span').textContent = 'Listening...';
+        
+        // Start recognition for this press
+        speechRecognition.startListening();
+    }
+
+    /**
+     * Handle the end of press-to-talk
+     */
+    handlePressTalkEnd() {
+        if (this.currentPhase !== PHASE.RECORDING) return;
+        
+        this.elements.talkButton.classList.remove('active');
+        this.elements.talkButton.querySelector('span').textContent = 'Hold to Talk';
+        
+        // Stop recognition when button is released
+        if (speechRecognition.isListening) {
+            speechRecognition.stopListening();
+        }
+    }
+
+    /**
+     * Request microphone permission explicitly
+     */
+    async requestMicrophonePermission() {
+        this.log('Requesting microphone permission...');
+        this.elements.permissionStatus.textContent = 'Requesting permission...';
+        
+        const permissionGranted = await speechRecognition.requestMicrophoneAccess();
+        
+        if (permissionGranted) {
+            this.log('Microphone permission granted');
+            this.elements.permissionStatus.textContent = 'Permission granted!';
+            this.updatePermissionUI('granted');
+            
+            // Proceed to introduction phase
+            setTimeout(() => {
+                this.startIntroductionPhase();
+            }, 1000);
+        } else {
+            this.log('Microphone permission denied', 'error');
+            this.elements.permissionStatus.textContent = 'Permission denied. Please enable microphone access in your browser settings.';
+            this.updatePermissionUI('denied');
+        }
+    }
+
+    /**
+     * Update permission UI based on current status
+     */
+    updatePermissionUI(status) {
+        if (this.elements.permissionStatus) {
+            switch (status) {
+                case 'granted':
+                    this.elements.permissionStatus.className = 'status-message success';
+                    this.elements.permissionStatus.textContent = 'Microphone access granted!';
+                    if (this.elements.grantPermissionButton) {
+                        this.elements.grantPermissionButton.disabled = true;
+                        this.elements.grantPermissionButton.textContent = 'Permission Granted';
+                    }
+                    break;
+                    
+                case 'denied':
+                    this.elements.permissionStatus.className = 'status-message error';
+                    this.elements.permissionStatus.textContent = 'Microphone access denied. Please enable in browser settings.';
+                    if (this.elements.grantPermissionButton) {
+                        this.elements.grantPermissionButton.textContent = 'Enable in Settings';
+                    }
+                    break;
+                    
+                case 'prompt':
+                    this.elements.permissionStatus.className = 'status-message warning';
+                    this.elements.permissionStatus.textContent = 'Please click "Allow" when prompted for microphone access.';
+                    break;
+                    
+                default:
+                    this.elements.permissionStatus.className = 'status-message';
+                    this.elements.permissionStatus.textContent = 'Permission status unknown.';
+            }
+        }
+    }
+
+    /**
+     * Update network status UI
+     */
+    updateNetworkStatusUI(status) {
+        if (this.elements.networkStatus) {
+            const statusElement = this.elements.networkStatus;
+            const statusText = statusElement.querySelector('.status-text');
+            
+            statusElement.className = `status-indicator ${status}`;
+            
+            switch (status) {
+                case 'online':
+                    statusText.textContent = 'Online';
+                    break;
+                case 'offline':
+                    statusText.textContent = 'Offline';
+                    break;
+                case 'unstable':
+                    statusText.textContent = 'Unstable Connection';
+                    break;
+                default:
+                    statusText.textContent = status;
+            }
+        }
+    }
+
+    /**
+     * Update talk button state
+     */
+    updateTalkButtonState(isListening) {
+        if (!this.elements.talkButton) return;
+        
+        if (isListening) {
+            this.elements.talkButton.classList.add('active');
+            this.elements.talkButton.querySelector('span').textContent = 'Listening...';
+        } else {
+            this.elements.talkButton.classList.remove('active');
+            this.elements.talkButton.querySelector('span').textContent = 'Hold to Talk';
+        }
     }
 
     /**
@@ -273,15 +571,34 @@ class SpeechToBrailleApp {
         this.elements.interimResult.textContent = '';
         this.elements.finalResult.textContent = '';
         
-        // Start listening
-        speechRecognition.startListening();
+        // Start listening - handle differently based on device type
+        if (this.isPressToTalk) {
+            // For mobile, wait for press-to-talk button
+            this.log('Ready for press-to-talk input');
+            // Show instruction
+            const instructionEl = document.createElement('div');
+            instructionEl.className = 'instruction-text';
+            instructionEl.textContent = 'Press and hold the button to speak';
+            
+            const recordingContent = this.elements.phaseContainers[PHASE.RECORDING].querySelector('.phase-content');
+            if (recordingContent && !recordingContent.querySelector('.instruction-text')) {
+                recordingContent.insertBefore(instructionEl, recordingContent.firstChild.nextSibling);
+            }
+        } else {
+            // For desktop, start continuous listening
+            speechRecognition.startListening();
+        }
         
         // Animate audio wave
-        this.animateAudioWave(true);
+        this.animateAudioWave(false); // Initially not active until we get audio
         
         // Speak prompt
         setTimeout(() => {
-            speechRecognition.speak('I\'m listening', { rate: 1.2 });
+            if (this.isPressToTalk) {
+                speechRecognition.speak('Press and hold to speak', { rate: 1.2 });
+            } else {
+                speechRecognition.speak('I\'m listening', { rate: 1.2 });
+            }
         }, 500);
     }
 
@@ -351,11 +668,13 @@ class SpeechToBrailleApp {
     switchPhase(phase) {
         // Remove active class from all phases
         Object.values(this.elements.phaseContainers).forEach(container => {
-            container.classList.remove('active');
+            if (container) container.classList.remove('active');
         });
         
         // Add active class to target phase
-        this.elements.phaseContainers[phase].classList.add('active');
+        if (this.elements.phaseContainers[phase]) {
+            this.elements.phaseContainers[phase].classList.add('active');
+        }
         
         // Update current phase
         this.currentPhase = phase;
@@ -372,6 +691,35 @@ class SpeechToBrailleApp {
             this.elements.audioWave.classList.add('listening');
         } else {
             this.elements.audioWave.classList.remove('listening');
+        }
+    }
+
+    /**
+     * Update audio level visualization based on microphone input
+     */
+    updateAudioLevel() {
+        // This would ideally use AudioContext to get actual microphone levels
+        // For now, we'll simulate varying levels
+        if (!this.elements.audioLevel) return;
+        
+        const levelBar = this.elements.audioLevel.querySelector('.level-bar');
+        if (!levelBar) return;
+        
+        if (speechRecognition.isListening) {
+            // Generate random audio level between 10% and 90%
+            const randomLevel = 10 + Math.floor(Math.random() * 80);
+            levelBar.style.width = `${randomLevel}%`;
+            
+            // Adjust color based on level
+            if (randomLevel > 80) {
+                levelBar.style.backgroundColor = '#ff4d4d'; // Red for very loud
+            } else if (randomLevel > 40) {
+                levelBar.style.backgroundColor = '#4CAF50'; // Green for good level
+            } else {
+                levelBar.style.backgroundColor = '#2196F3'; // Blue for quiet
+            }
+        } else {
+            levelBar.style.width = '0%';
         }
     }
 

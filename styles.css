@@ -305,3 +305,169 @@ button {
         font-size: 1.5rem;
     }
 }
+
+/* Permission Phase Styles */
+#permission-phase .phase-content {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.permission-image {
+    margin: 20px auto;
+    max-width: 300px;
+    border: 2px solid #eee;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.permission-image img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.status-message {
+    margin: 15px auto;
+    padding: 10px;
+    border-radius: 5px;
+    background-color: #f8f9fa;
+    border-left: 4px solid #6c757d;
+}
+
+.status-message.success {
+    background-color: #d4edda;
+    border-left-color: var(--success-color);
+    color: #155724;
+}
+
+.status-message.error {
+    background-color: #f8d7da;
+    border-left-color: var(--danger-color);
+    color: #721c24;
+}
+
+.status-message.warning {
+    background-color: #fff3cd;
+    border-left-color: #ffc107;
+    color: #856404;
+}
+
+/* Press-to-Talk Button */
+.talk-button {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 150px;
+    height: 150px;
+    border-radius: 75px;
+    background-color: var(--primary-color);
+    color: white;
+    font-size: 1rem;
+    border: none;
+    box-shadow: 0 4px 10px rgba(0,123,255,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 100;
+    transition: all 0.3s ease;
+}
+
+.talk-button span {
+    display: block;
+    text-align: center;
+    padding: 10px;
+}
+
+.talk-button.active {
+    background-color: #dc3545;
+    transform: translateX(-50%) scale(1.1);
+    box-shadow: 0 6px 15px rgba(220,53,69,0.4);
+}
+
+/* Audio Level Indicator */
+.audio-level {
+    width: 100%;
+    height: 8px;
+    background-color: #f1f1f1;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 15px 0;
+}
+
+.level-bar {
+    height: 100%;
+    width: 0%;
+    background-color: #4CAF50;
+    transition: width 0.1s ease;
+}
+
+/* Network Status */
+#network-status {
+    margin-left: auto;
+    margin-right: 20px;
+}
+
+.status-indicator.online .status-dot {
+    background-color: var(--success-color);
+}
+
+.status-indicator.offline .status-dot {
+    background-color: var(--danger-color);
+}
+
+.status-indicator.unstable .status-dot {
+    background-color: #ffc107;
+    animation: pulse 1.5s infinite;
+}
+
+/* Instruction Text */
+.instruction-text {
+    font-size: 1.1rem;
+    color: var(--secondary-color);
+    margin: 15px 0;
+    font-style: italic;
+    text-align: center;
+}
+
+/* Mobile Optimizations */
+@media (max-width: 768px) {
+    h1 {
+        font-size: 1.5rem;
+    }
+    
+    .talk-button {
+        width: 120px;
+        height: 120px;
+        border-radius: 60px;
+        bottom: 20px;
+    }
+    
+    .phase-content {
+        padding: 15px;
+    }
+    
+    .control-panel {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .control-panel button {
+        width: 100%;
+    }
+    
+    .braille-cell {
+        padding: 10px;
+    }
+    
+    .braille-dot {
+        width: 15px;
+        height: 15px;
+    }
+    
+    /* Make room for the talk button */
+    footer {
+        margin-bottom: 150px;
+    }
+}
