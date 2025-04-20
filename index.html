@@ -42,27 +42,25 @@
                     <div id="mic-permission" class="permission-item">
                         <h3>Microphone Access</h3>
                         <p>Speech recognition requires microphone access to hear your voice.</p>
-                        <button id="enable-mic-btn" class="btn btn-permission">Enable Microphone</button>
-                        <span class="permission-status" id="mic-status">Not enabled</span>
+                        <button id="request-mic-btn" class="btn btn-permission">Grant Microphone Access</button>
+                        <span id="mic-status" class="permission-status">Pending</span>
                     </div>
                     
-                    <div id="tts-permission" class="permission-item">
-                        <h3>Text-to-Speech</h3>
-                        <p>Enable voice feedback to hear translations and instructions.</p>
-                        <button id="test-tts-btn" class="btn btn-permission">Test Voice</button>
-                        <span class="permission-status" id="tts-status">Not tested</span>
+                    <div id="ble-permission" class="permission-item">
+                        <h3>Bluetooth Access</h3>
+                        <p>Connect to your braille display device via Bluetooth.</p>
+                        <button id="request-ble-btn" class="btn btn-permission">Enable Bluetooth</button>
+                        <span id="ble-status-text" class="permission-status">Pending</span>
                     </div>
                 </div>
-
-                <button id="start-btn" class="btn btn-primary" disabled>Start Speaking</button>
-                <button id="test-btn" class="btn btn-secondary">Test Braille Patterns</button>
             </div>
         </section>
 
-        <!-- Phase 2: Recording/Speaking -->
+        <!-- Phase 2: Recording -->
         <section id="recording-phase" class="app-phase">
             <div class="container">
                 <h2>Speak Now</h2>
+                <div class="word-recognition-indicator"></div>
                 <div id="audio-visualizer">
                     <div class="wave-container">
                         <div class="wave-bar"></div>
@@ -99,8 +97,8 @@
 
     <footer>
         <div class="footer-controls">
-            <label class="toggle-switch">ound always enabled -->
-                <input type="checkbox" id="sound-toggle" checked>sole</div>
+            <label class="toggle-switch">
+                <input type="checkbox" id="sound-toggle" checked>
                 <span class="toggle-slider"></span>
                 <span class="toggle-label">Sound</span>
             </label>
@@ -119,30 +117,5 @@
             </div>
         </div>
     </footer>
-="toggle-label">Sound</span>
-            </label>"debug-output"></div>
-            <div id="debug-toggle">Debug Console</div>
-        </div>  <input type="text" id="debug-command" placeholder="Enter BLE command...">
-        <div id="debug-console" class="hidden">btn btn-small">Send</button>
-            <div id="debug-output"></div>
-            <div class="debug-input">th improved caching
-                <input type="text" id="debug-command" placeholder="Enter BLE command...">
-                <button id="debug-send" class="btn btn-small">Send</button>g</button>
-            window.addEventListener('load', async () => {n btn-small">Test Braille Layout</button>
-                try {s="debug-tools">n = await navigator.serviceWorker.register('service-worker.js');
-                    const registration = await navigator.serviceWorker.register('service-worker.js');ope);
-                    console.log('Service Worker registered successfully with scope:', registration.scope);
-                <button id="debug-clear" class="btn btn-small">Clear</button>
-                    // Request persistent storage for offline datall">Test Braille Layout</button>
-                    if (navigator.storage && navigator.storage.persist) {st();
-                        const isPersisted = await navigator.storage.persist();ed' : 'denied'}`);
-                        console.log(`Persistent storage ${isPersisted ? 'granted' : 'denied'}`);
-                    }raille.js"></script>    } catch (error) {
-                } catch (error) {ipt>Worker registration failed:', error);
-                    console.log('Service Worker registration failed:', error);
-                }js/app.js"></script>
-            });="js/braille-fixes.js"></script>
-        }pt>>
-    </script>gister service worker with improved caching
-</body> if ('serviceWorker' in navigator) {
+</body>
 </html>

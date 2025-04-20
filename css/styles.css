@@ -284,6 +284,9 @@ main {
 
 /* Language Selector */
 .language-selector {
+    display: flex;
+    justify-content: center;
+    align-items: center;
     margin: 1rem 0;
 }
 
@@ -508,10 +511,6 @@ footer {
     font-size: 0.9rem;
 }
 
-#debug-toggle:hover {
-    text-decoration: underline;
-}
-
 /* No match styling */
 .no-match {
     color: #F44336;
@@ -561,6 +560,7 @@ footer {
 
 /* Countdown Timers */
 .countdown-container {
+    text-align: center;
     margin: 15px 0;
     padding: 10px;
     background-color: rgba(0, 0, 0, 0.05);
@@ -644,6 +644,12 @@ footer {
 .permission-item h3 {
     margin-top: 0;
     font-size: 1.2rem;
+}
+
+.permission-item p {
+    margin-bottom: 0;
+    font-size: 1rem;
+    color: var(--light-text);
 }
 
 .btn-permission {
