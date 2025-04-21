@@ -10,6 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Speech to Braille Translator</title>
     <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/feedback.css">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="img/icons/icon-192x192.png">
 </head>
@@ -47,56 +48,56 @@
                     </div>
                     
                     <div id="ble-permission" class="permission-item">
-                        <h3>Bluetooth Access</h3>
+                        <h3>Bluetooth Access</h3>s.</p>
                         <p>Connect to your braille display device via Bluetooth.</p>
                         <button id="request-ble-btn" class="btn btn-permission">Enable Bluetooth</button>
                         <span id="ble-status-text" class="permission-status">Pending</span>
                     </div>
-                </div>
-            </div>
-        </section>
+                </div>  <div class="controls-container">
+            </div>      <button id="start-btn" class="btn btn-primary" disabled>Start</button>
+        </section>                    </div>
 
         <!-- Phase 2: Recording -->
         <section id="recording-phase" class="app-phase">
             <div class="container">
                 <h2>Speak Now</h2>
-                <div class="word-recognition-indicator"></div>
+                <div class="word-recognition-indicator"></div>="app-phase">
                 <div id="audio-visualizer">
                     <div class="wave-container">
+                        <div class="wave-bar"></div>or"></div>
                         <div class="wave-bar"></div>
                         <div class="wave-bar"></div>
                         <div class="wave-bar"></div>
                         <div class="wave-bar"></div>
                         <div class="wave-bar"></div>
                         <div class="wave-bar"></div>
-                        <div class="wave-bar"></div>
-                        <div class="wave-bar"></div>
-                    </div>
+                        <div class="wave-bar"></div>iv class="wave-bar"></div>
+                    </div>  <div class="wave-bar"></div>
                 </div>
                 <div id="interim-text" class="speech-text"></div>
                 <div id="final-text" class="speech-text"></div>
-                <button id="clear-btn" class="btn">Clear</button>
-            </div>
-        </section>
-
+                <button id="clear-btn" class="btn">Clear</button>div>
+            </div>iv id="interim-text" class="speech-text"></div>
+        </section>                <div id="final-text" class="speech-text"></div>
+ck" class="feedback-message hidden">
         <!-- Phase 3: Output/Display -->
-        <section id="output-phase" class="app-phase">
+        <section id="output-phase" class="app-phase">ssage">No braille pattern found</span>
             <div class="container">
                 <h2>Braille Translation</h2>
                 <div id="recognized-word" class="word-display"></div>
                 <div id="braille-display" class="braille-display">
                     <div class="braille-cells-container"></div>
-                </div>
+                </div>->
                 <div class="controls">
                     <button id="back-to-speak-btn" class="btn btn-primary">Continue Speaking</button>
-                    <button id="restart-btn" class="btn">Start Over</button>
-                </div>
-            </div>
-        </section>
-    </main>
-
-    <footer>
-        <div class="footer-controls">
+                    <button id="restart-btn" class="btn">Start Over</button>aille Translation</h2>
+                </div>iv id="recognized-word" class="word-display"></div>
+            </div>iv id="braille-display" class="braille-display">
+        </section>         <div class="braille-cells-container"></div>
+    </main>                </div>
+    <div class="controls">
+    <footer>to-speak-btn" class="btn btn-primary">Continue Speaking</button>
+        <div class="footer-controls">tn" class="btn">Start Over</button>
             <label class="toggle-switch">
                 <input type="checkbox" id="sound-toggle" checked>
                 <span class="toggle-slider"></span>
@@ -105,13 +106,21 @@
             <div id="debug-toggle">Debug Console</div>
         </div>
         <div id="debug-console" class="hidden">
-            <div id="debug-output"></div>
+            <div id="debug-output"></div>" id="sound-toggle" checked>
             <div class="debug-input">
                 <input type="text" id="debug-command" placeholder="Enter BLE command...">
-                <button id="debug-send" class="btn btn-small">Send</button>
-            </div>
+                <button id="debug-send" class="btn btn-small">Send</button>l>
+            </div>bug Console</div>
             <div class="debug-tools">
                 <button id="speed-test-btn" class="btn btn-small">BLE Speed Test</button>
+                <button id="clear-debug-btn" class="btn btn-small">Clear Log</button>
+                <button id="debug-test-braille" class="btn btn-small">Test Braille Layout</button>lass="debug-input">
+            </div>  <input type="text" id="debug-command" placeholder="Enter BLE command...">
+        </div>   <button id="debug-send" class="btn btn-small">Send</button>
+    </footer>     </div>
+</body>     <div class="debug-tools">
+
+</html>                <button id="speed-test-btn" class="btn btn-small">BLE Speed Test</button>
                 <button id="clear-debug-btn" class="btn btn-small">Clear Log</button>
                 <button id="debug-test-braille" class="btn btn-small">Test Braille Layout</button>
             </div>

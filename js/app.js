@@ -33,7 +33,6 @@ class SpeechToBrailleApp {
             },
             bleStatus: document.getElementById('ble-status'),
             connectButton: document.getElementById('connect-ble'),
-            testButton: document.getElementById('test-braille'),
             debugToggle: document.getElementById('toggle-debug'),
             debugConsole: document.getElementById('debug-console'),
             debugOutput: document.getElementById('debug-output'),
