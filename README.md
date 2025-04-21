@@ -193,11 +193,6 @@ Data is sent in the format: `O:[[1,2,3],[4,5,6]]` where:
 
 ## Debugging Features
 
-
-// ...existing code...
-
-## Debugging Features
-
 ### Debug Console
 
 The debug console provides powerful tools for testing, debugging, and exploring the application's functionality.
@@ -231,7 +226,7 @@ The debug console allows you to test and visualize braille patterns:
 
 **Testing Individual Characters:**
 
-test:a
+`test:a`
 
 This will:
 - Show the braille pattern for 'a' in the console
@@ -239,13 +234,13 @@ This will:
 
 **Testing Multiple Characters:**
 
-test:he
+`test:he`
 
 This will attempt to find and display the pattern for the entire word.
 
 **Running the Alphabet Test:**
 
-test:alphabet
+`test:alphabet`
 
 This will:
 - Cycle through all letters a-z
@@ -255,16 +250,18 @@ This will:
 
 **Testing Numbers:**
 
-test:numbers
+`test:numbers`
 
 This runs through braille patterns for numbers 0-9.
+- Display each number's braille pattern in the console
+- Send the patterns to the braille display if connected
+- Show progress as each number is tested
 
 #### Searching the Braille Database
 
 To search for specific words or characters in the database:
 
-search:the
-
+`search:the`
 
 Search results include:
 - The word found
@@ -278,6 +275,15 @@ Search results include:
 
 To view available languages:
 
+`language:`
+
+This will display all supported languages in the database (e.g., UEB, Philippine).
+
+To change the current translation language:
+
+`language:UEB`
+
+This sets the active language to Unified English Braille.
 
 #### Direct Hardware Control
 
@@ -285,15 +291,17 @@ For direct control of the braille hardware:
 
 **Send Patterns:**
 
-O:[[1,2,3],[4,5,6]]
+`O:[[1,2,3],[4,5,6]]`
 
 This raises dots 1, 2, and 3 on the first cell, and dots 4, 5, and 6 on the second cell.
 
 **Clear Display:**
 
-N:[]
+`N:[]`
 
-pins:0,2,1
+**Control Individual Pins:**
+
+`pins:0,2,1`
 
 This sets cell 0, pin 2 to HIGH (raised).
 
@@ -311,7 +319,6 @@ To test the communication speed with the braille device:
 * `pins:0,2,1` - Directly control a specific pin (cell, pin, value)
 * `test:a` - Test the letter 'a'
 * `search:and` - Find the braille pattern for 'and'
-
 
 ### BLE Speed Test
 

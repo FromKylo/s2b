@@ -47,7 +47,9 @@ class SpeechToBrailleApp {
             brailleDisplay: document.getElementById('braille-display'),
             audioWave: document.querySelector('.audio-wave'),
             permissionStatus: document.querySelector('.permission-status'),
-            grantPermissionButton: document.getElementById('grant-permission')
+            grantPermissionButton: document.getElementById('grant-permission'),
+            // Add braille test button reference
+            testButton: document.getElementById('braille-test-btn')
         };
         
         // Add mobile-specific UI elements
