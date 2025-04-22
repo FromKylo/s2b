@@ -1,96 +1,78 @@
-/**
- * Service Worker for Speech to Braille PWA
- * Handles caching for offline functionality
- */
-
 const CACHE_NAME = 'speech-to-braille-v1';
-const ASSETS_TO_CACHE = [
+
+const STATIC_ASSETS = [
     '/',
     '/index.html',
     '/styles.css',
-    '/js/app.js',
-    '/js/speech-recognition.js',
-    '/js/braille-translation.js',
-    '/js/ble-connection.js',
-    '/braille-database.csv',
     '/manifest.json',
     '/images/icon-192x192.png',
     '/images/icon-512x512.png',
-    '/sounds/recording-start.mp3',
-    '/sounds/recording-stop.mp3',
-    '/sounds/output-success.mp3',
-    '/sounds/output-failure.mp3'
+    '/js/app.js',
+    '/js/braille-translation.js',
+    '/js/speech-recognition.js',
+    '/js/ble-connection.js',
+    '/js/speech-handler.js',
+    '/js/debug.js',
+    '/js/ble-ui.js',
+    '/js/debug-ui.js',
+    '/js/output-ui.js',
+    '/css/debug.css',
+    '/braille-database.json',
+    '/braille-database.csv'
 ];
 
-// Install event - cache assets
+// Install event - cache static assets
 self.addEventListener('install', event => {
-    console.log('[Service Worker] Installing Service Worker');
-    
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then(cache => {
-                console.log('[Service Worker] Caching app shell');
-                return cache.addAll(ASSETS_TO_CACHE);
+                console.log('Caching static assets');
+                return cache.addAll(STATIC_ASSETS);
             })
-            .then(() => {
-                console.log('[Service Worker] Successfully cached app shell');
-                return self.skipWaiting();
-            })
-            .catch(err => {
-                console.error('[Service Worker] Error caching app shell:', err);
-            })
+            .then(() => self.skipWaiting())
     );
 });
 
 // Activate event - clean up old caches
 self.addEventListener('activate', event => {
-    console.log('[Service Worker] Activating Service Worker');
-    
     event.waitUntil(
-        caches.keys()
-            .then(keyList => {
-                return Promise.all(keyList.map(key => {
-                    if (key !== CACHE_NAME) {
-                        console.log('[Service Worker] Removing old cache:', key);
-                        return caches.delete(key);
+        caches.keys().then(cacheNames => {
+            return Promise.all(
+                cacheNames.map(name => {
+                    if (name !== CACHE_NAME) {
+                        console.log('Removing old cache:', name);
+                        return caches.delete(name);
                     }
-                }));
-            })
-            .then(() => {
-                console.log('[Service Worker] Service Worker activated');
-                return self.clients.claim();
-            })
+                })
+            );
+        }).then(() => self.clients.claim())
     );
 });
 
-// Fetch event - serve from cache or network
+// Fetch event - serve from cache, fall back to network
 self.addEventListener('fetch', event => {
-    // Skip non-GET requests and bluetooth requests
-    if (event.request.method !== 'GET' || 
-        event.request.url.includes('bluetooth')) {
-        return;
-    }
-    
     event.respondWith(
         caches.match(event.request)
-            .then(cachedResponse => {
-                // Return cached response if found
-                if (cachedResponse) {
-                    return cachedResponse;
+            .then(response => {
+                // Cache hit - return response
+                if (response) {
+                    return response;
                 }
                 
-                // Otherwise fetch from network
-                return fetch(event.request)
+                // Clone the request
+                const fetchRequest = event.request.clone();
+                
+                return fetch(fetchRequest)
                     .then(response => {
-                        // Check if response is valid
+                        // Check if valid response
                         if (!response || response.status !== 200 || response.type !== 'basic') {
                             return response;
                         }
                         
-                        // Clone the response as it's a stream and can only be consumed once
+                        // Clone the response
                         const responseToCache = response.clone();
                         
-                        // Add the new response to cache for future use
+                        // Add to cache
                         caches.open(CACHE_NAME)
                             .then(cache => {
                                 cache.put(event.request, responseToCache);
@@ -99,16 +81,16 @@ self.addEventListener('fetch', event => {
                         return response;
                     })
                     .catch(error => {
-                        console.error('[Service Worker] Fetch failed:', error);
+                        console.error('Fetch failed:', error);
                         // You could return a custom offline page here
                     });
             })
     );
 });
 
-// Message event - handle messages from clients
+// Handle messages from the client
 self.addEventListener('message', event => {
-    if (event.data && event.data.type === 'SKIP_WAITING') {
+    if (event.data.action === 'skipWaiting') {
         self.skipWaiting();
     }
 });

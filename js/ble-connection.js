@@ -1,409 +1,182 @@
-/**
- * BLE Connection Module
- * Handles Bluetooth Low Energy connection to braille display hardware
- */
-
 class BLEConnection {
     constructor() {
-        // Bluetooth device info
+        // BLE configuration
+        this.deviceName = "Braille Display";
+        this.serviceUuid = "19b10000-e8f2-537e-4f6c-d104768a1214";
+        this.characteristicUuid = "19b10001-e8f2-537e-4f6c-d104768a1214";
+        
+        // State management
         this.device = null;
         this.server = null;
         this.service = null;
         this.characteristic = null;
-        this.speedTestCharacteristic = null;
-        
-        // UUIDs (must match Arduino sketch)
-        this.SERVICE_UUID = '19b10000-e8f2-537e-4f6c-d104768a1214';
-        this.CHARACTERISTIC_UUID = '19b10001-e8f2-537e-4f6c-d104768a1214';
-        this.SPEED_TEST_CHARACTERISTIC_UUID = '19b10002-e8f2-537e-4f6c-d104768a1214';
-        
-        // Status flags
         this.isConnected = false;
-        this.isConnecting = false;
         
         // Callbacks
-        this.onConnectCallback = null;
-        this.onDisconnectCallback = null;
-        this.onErrorCallback = null;
-        
-        // Auto-reconnect
-        this.autoReconnect = false;
-        this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 3;
+        this.callbacks = {
+            onConnected: null,
+            onDisconnected: null,
+            onError: null,
+            onDataSent: null
+        };
     }
 
-    /**
-     * Check if Web Bluetooth API is available
-     */
-    isAvailable() {
-        return 'bluetooth' in navigator;
-    }
-
-    /**
-     * Connect to the BLE device
-     */
     async connect() {
-        if (!this.isAvailable()) {
-            const error = 'Web Bluetooth API not available in this browser';
-            console.error(error);
-            if (this.onErrorCallback) this.onErrorCallback(error);
-            return false;
+        if (!navigator.bluetooth) {
+            const error = new Error('Bluetooth not supported in this browser');
+            if (this.callbacks.onError) this.callbacks.onError(error);
+            throw error;
         }
-        
-        if (this.isConnected) {
-            console.log('Already connected to BLE device.');
-            return true;
-        }
-        
-        if (this.isConnecting) {
-            console.log('Connection already in progress.');
-            return false;
-        }
-        
-        this.isConnecting = true;
-        
+
         try {
-            // Request device with specific name and service
+            console.log('Requesting Bluetooth device...');
+            
             this.device = await navigator.bluetooth.requestDevice({
-                filters: [
-                    { name: 'Braille Display' },
-                    { services: [this.SERVICE_UUID] }
-                ]
+                filters: [{ name: this.deviceName }],
+                optionalServices: [this.serviceUuid]
             });
             
-            // Log device info
-            console.log('BLE device selected:', this.device.name);
-            
-            // Add disconnection listener
-            this.device.addEventListener('gattserverdisconnected', () => this.handleDisconnection());
-            
-            // Connect to GATT server
-            this.server = await this.device.gatt.connect();
-            console.log('Connected to GATT server');
-            
-            // Get service
-            this.service = await this.server.getPrimaryService(this.SERVICE_UUID);
-            console.log('Got primary service');
-            
-            // Get characteristic
-            this.characteristic = await this.service.getCharacteristic(this.CHARACTERISTIC_UUID);
-            console.log('Got characteristic');
-            
-            // Try to get the speed test characteristic (optional)
-            try {
-                this.speedTestCharacteristic = await this.service.getCharacteristic(
-                    this.SPEED_TEST_CHARACTERISTIC_UUID
-                );
-                console.log('Got speed test characteristic');
-            } catch (e) {
-                console.warn('Speed test characteristic not available:', e);
-                // Continue without speed test characteristic
+            if (!this.device) {
+                throw new Error('No Bluetooth device selected');
             }
+            
+            // Set up disconnect listener
+            this.device.addEventListener('gattserverdisconnected', this.onDisconnected.bind(this));
+            
+            console.log('Connecting to GATT server...');
+            this.server = await this.device.gatt.connect();
+            
+            console.log('Getting primary service...');
+            this.service = await this.server.getPrimaryService(this.serviceUuid);
+            
+            console.log('Getting characteristic...');
+            this.characteristic = await this.service.getCharacteristic(this.characteristicUuid);
             
             this.isConnected = true;
-            this.isConnecting = false;
-            this.reconnectAttempts = 0;
+            console.log('Connected to Braille Display');
             
-            // Send test message to confirm connection
-            await this.sendData('BLE:HELLO');
-            
-            if (this.onConnectCallback) this.onConnectCallback();
-            
+            if (this.callbacks.onConnected) this.callbacks.onConnected();
             return true;
+            
         } catch (error) {
-            this.isConnecting = false;
-            console.error('BLE connection failed:', error);
-            
-            if (this.onErrorCallback) this.onErrorCallback(error.message || 'Connection failed');
-            
-            return false;
-        }
-    }
-
-    /**
-     * Handle disconnection event
-     */
-    async handleDisconnection() {
-        this.isConnected = false;
-        console.log('Device disconnected');
-        
-        if (this.onDisconnectCallback) this.onDisconnectCallback();
-        
-        // Attempt to reconnect if enabled
-        if (this.autoReconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
-            this.reconnectAttempts++;
-            console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
-            
-            // Wait before reconnecting
-            setTimeout(async () => {
-                try {
-                    if (this.device && this.device.gatt) {
-                        this.server = await this.device.gatt.connect();
-                        console.log('Reconnected to GATT server');
-                        this.isConnected = true;
-                        
-                        if (this.onConnectCallback) this.onConnectCallback();
-                    }
-                } catch (error) {
-                    console.error('Reconnection failed:', error);
-                }
-            }, 2000);
-        }
-    }
-
-    /**
-     * Disconnect from the BLE device
-     */
-    async disconnect() {
-        if (!this.isConnected || !this.device) return;
-        
-        try {
-            // Disable auto-reconnect before disconnecting
-            this.autoReconnect = false;
-            
-            if (this.device.gatt && this.device.gatt.connected) {
-                this.device.gatt.disconnect();
-                console.log('Disconnected from device');
-            }
-            
+            console.error('BLE connection error:', error);
             this.isConnected = false;
-            
-            if (this.onDisconnectCallback) this.onDisconnectCallback();
-            
-            return true;
-        } catch (error) {
-            console.error('Error disconnecting:', error);
-            return false;
+            if (this.callbacks.onError) this.callbacks.onError(error);
+            throw error;
         }
     }
 
-    /**
-     * Send data to the BLE device
-     * @param {string|ArrayBuffer} data - Data to send
-     */
-    async sendData(data) {
-        if (!this.isConnected || !this.characteristic) {
-            console.error('Not connected to BLE device');
-            return false;
-        }
-        
-        try {
-            // Convert string to ArrayBuffer if needed
-            let buffer;
-            if (typeof data === 'string') {
-                const encoder = new TextEncoder();
-                buffer = encoder.encode(data);
-            } else if (data instanceof ArrayBuffer) {
-                buffer = data;
-            } else {
-                console.error('Invalid data type. Must be string or ArrayBuffer');
-                return false;
-            }
-            
-            // Send the data
-            await this.characteristic.writeValueWithResponse(buffer);
-            console.log('Data sent successfully:', data);
-            return true;
-        } catch (error) {
-            console.error('Error sending data:', error);
-            return false;
-        }
-    }
-
-    /**
-     * Send braille pattern to hardware
-     * @param {Array} pattern - Braille pattern array
-     */
-    async sendBraillePattern(pattern) {
-        if (!pattern) return false;
-        
-        try {
-            // Normalize pattern format to ensure proper handling of multi-cell patterns
-            let normalizedPattern;
-            
-            // Check if it's already a multi-cell pattern (array of arrays)
-            if (Array.isArray(pattern) && Array.isArray(pattern[0])) {
-                normalizedPattern = pattern;
-            } else if (Array.isArray(pattern)) {
-                // It's a single-cell pattern, wrap it in an array
-                normalizedPattern = [pattern];
-            } else {
-                console.error('Invalid pattern format:', pattern);
-                return false;
-            }
-            
-            // Format: "O:[[1,2],[3,4]]" - O: prefix indicates output phase
-            const dataString = `O:${JSON.stringify(normalizedPattern)}`;
-            console.log('Sending braille pattern:', dataString);
-            
-            return await this.sendData(dataString);
-        } catch (error) {
-            console.error('Error sending braille pattern:', error);
-            return false;
-        }
-    }
-
-    /**
-     * Clear the braille display (lower all dots)
-     */
-    async clearDisplay() {
-        try {
-            // Format: "N:[]" - N: prefix indicates not output phase
-            const dataString = 'N:[]';
-            return await this.sendData(dataString);
-        } catch (error) {
-            console.error('Error clearing display:', error);
-            return false;
-        }
-    }
-
-    /**
-     * Run BLE speed test to measure connection performance
-     * @param {number} packetSize - Size of each test packet in bytes
-     * @param {number} packetCount - Number of packets to send
-     * @param {number} delayMs - Delay between packets in milliseconds
-     */
-    async runSpeedTest(packetSize = 20, packetCount = 50, delayMs = 20) {
-        if (!this.isConnected) {
-            console.error('Not connected to BLE device');
-            return false;
-        }
-        
-        console.log(`Starting BLE speed test: ${packetCount} packets of ${packetSize} bytes each`);
-        const testData = new Uint8Array(packetSize).fill(0xFF); // Fill with 0xFF
-        
-        const startTime = Date.now();
-        let successCount = 0;
-        
-        const useSpeedCharacteristic = !!this.speedTestCharacteristic;
-        console.log(`Using ${useSpeedCharacteristic ? 'dedicated speed test' : 'regular'} characteristic`);
-        
-        // Run the test
-        for (let i = 0; i < packetCount; i++) {
-            try {
-                // Update first byte to indicate packet number
-                testData[0] = i % 256;
-                
-                if (useSpeedCharacteristic) {
-                    // Use dedicated speed test characteristic if available
-                    await this.speedTestCharacteristic.writeValueWithoutResponse(testData);
-                } else {
-                    // Fall back to regular characteristic with special prefix
-                    const prefix = `S:${i}:`;
-                    const encoder = new TextEncoder();
-                    const prefixBuffer = encoder.encode(prefix);
-                    
-                    // Combine prefix and test data
-                    const combined = new Uint8Array(prefixBuffer.length + testData.length);
-                    combined.set(prefixBuffer);
-                    combined.set(testData, prefixBuffer.length);
-                    
-                    await this.characteristic.writeValueWithoutResponse(combined);
-                }
-                
-                successCount++;
-                
-                // Wait if specified
-                if (delayMs > 0) {
-                    await new Promise(resolve => setTimeout(resolve, delayMs));
-                }
-            } catch (error) {
-                console.error(`Error sending packet ${i}:`, error);
-            }
-        }
-        
-        const endTime = Date.now();
-        const durationMs = endTime - startTime;
-        const bytesTransferred = successCount * packetSize;
-        const speedBps = (bytesTransferred * 1000) / durationMs;
-        
-        const result = {
-            packetsTotal: packetCount,
-            packetsSuccess: successCount,
-            bytesTransferred,
-            durationMs,
-            speedBps
-        };
-        
-        console.log('Speed test results:', result);
-        return result;
-    }
-
-    /**
-     * Update the BLE status indicator in the UI
-     * @param {string} status - Status class (connected, disconnected, connecting)
-     * @param {string} text - Status text to display
-     */
-    updateBLEStatus(status, text) {
-        const statusElement = document.getElementById('ble-status');
-        if (!statusElement) return;
-        
-        statusElement.className = `status-indicator ${status}`;
-        const statusTextElement = statusElement.querySelector('.status-text');
-        if (statusTextElement) {
-            statusTextElement.textContent = text;
-        }
-        
-        // Update connect button text
-        const connectButton = document.getElementById('connect-ble');
-        if (connectButton) {
-            if (status === 'connected') {
-                connectButton.textContent = 'Disconnect';
-            } else {
-                connectButton.textContent = 'Connect Braille Display';
-            }
-        }
-    }
-
-    /**
-     * Run BLE speed test and display results
-     * @param {Function} logCallback - Function to log messages
-     */
-    async runUISpeedTest(logCallback) {
-        if (!this.isConnected) {
-            if (logCallback) logCallback('Cannot run speed test: not connected to BLE device', 'error');
-            return;
-        }
-        
-        if (logCallback) logCallback('Starting BLE speed test...');
-        
-        const results = await this.runSpeedTest();
-        
-        if (results) {
-            if (logCallback) logCallback(
-                `Speed test results: ${results.packetsSuccess}/${results.packetsTotal} packets, ` + 
-                `${results.bytesTransferred} bytes, ${results.speedBps.toFixed(2)} bytes/sec`,
-                'success'
-            );
+    async disconnect() {
+        if (this.device && this.device.gatt.connected) {
+            this.device.gatt.disconnect();
+            console.log('Disconnected from device');
         } else {
-            if (logCallback) logCallback('Speed test failed', 'error');
+            console.log('No device connected');
+        }
+        
+        this.isConnected = false;
+        this.device = null;
+        this.server = null;
+        this.service = null;
+        this.characteristic = null;
+    }
+
+    onDisconnected() {
+        console.log('Device disconnected');
+        this.isConnected = false;
+        
+        if (this.callbacks.onDisconnected) {
+            this.callbacks.onDisconnected();
         }
     }
 
-    /**
-     * Set callback for connection event
-     * @param {Function} callback - Function to call on connection
-     */
-    onConnect(callback) {
-        this.onConnectCallback = callback;
+    async sendBraillePattern(pattern) {
+        if (!this.isConnected || !this.characteristic) {
+            const error = new Error('Not connected to a BLE device');
+            if (this.callbacks.onError) this.callbacks.onError(error);
+            throw error;
+        }
+
+        try {
+            // Format the pattern according to specification: O:[[1,2,5],[3,4]]
+            const formattedPattern = `O:${JSON.stringify(pattern)}`;
+            const encoder = new TextEncoder();
+            const data = encoder.encode(formattedPattern);
+            
+            await this.characteristic.writeValue(data);
+            console.log('Sent pattern to device:', formattedPattern);
+            
+            if (this.callbacks.onDataSent) {
+                this.callbacks.onDataSent(formattedPattern);
+            }
+            
+            return true;
+        } catch (error) {
+            console.error('Error sending pattern:', error);
+            if (this.callbacks.onError) this.callbacks.onError(error);
+            throw error;
+        }
     }
 
-    /**
-     * Set callback for disconnection event
-     * @param {Function} callback - Function to call on disconnection
-     */
-    onDisconnect(callback) {
-        this.onDisconnectCallback = callback;
+    async runSpeedTest() {
+        if (!this.isConnected) {
+            throw new Error('Not connected to BLE device');
+        }
+
+        const results = {
+            totalTests: 10,
+            successfulTests: 0,
+            averageTime: 0,
+            startTime: Date.now()
+        };
+
+        // Simple test patterns
+        const testPatterns = [
+            [[1,3,5]],
+            [[1,2,3]],
+            [[4,5,6]],
+            [[1,4]],
+            [[2,5]],
+            [[3,6]],
+            [[1,2,3,4,5,6]],
+            [[1], [2], [3]],
+            [[1,3,5], [2,4,6]],
+            [[]]
+        ];
+
+        const times = [];
+        for (let i = 0; i < testPatterns.length; i++) {
+            const pattern = testPatterns[i];
+            const startTime = performance.now();
+            
+            try {
+                await this.sendBraillePattern(pattern);
+                const endTime = performance.now();
+                times.push(endTime - startTime);
+                results.successfulTests++;
+            } catch (error) {
+                console.error(`Test ${i+1} failed:`, error);
+            }
+            
+            // Add a small delay between tests
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        results.endTime = Date.now();
+        results.totalTime = results.endTime - results.startTime;
+        results.averageTime = times.length ? times.reduce((a, b) => a + b, 0) / times.length : 0;
+        
+        return results;
     }
 
-    /**
-     * Set callback for error events
-     * @param {Function} callback - Function to call on errors
-     */
-    onError(callback) {
-        this.onErrorCallback = callback;
+    on(event, callback) {
+        if (this.callbacks.hasOwnProperty(event)) {
+            this.callbacks[event] = callback;
+            return true;
+        }
+        return false;
     }
 }
 
-// Create global instance
+// Create and export a singleton instance
 const bleConnection = new BLEConnection();
