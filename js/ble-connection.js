@@ -330,6 +330,57 @@ class BLEConnection {
     }
 
     /**
+     * Update the BLE status indicator in the UI
+     * @param {string} status - Status class (connected, disconnected, connecting)
+     * @param {string} text - Status text to display
+     */
+    updateBLEStatus(status, text) {
+        const statusElement = document.getElementById('ble-status');
+        if (!statusElement) return;
+        
+        statusElement.className = `status-indicator ${status}`;
+        const statusTextElement = statusElement.querySelector('.status-text');
+        if (statusTextElement) {
+            statusTextElement.textContent = text;
+        }
+        
+        // Update connect button text
+        const connectButton = document.getElementById('connect-ble');
+        if (connectButton) {
+            if (status === 'connected') {
+                connectButton.textContent = 'Disconnect';
+            } else {
+                connectButton.textContent = 'Connect Braille Display';
+            }
+        }
+    }
+
+    /**
+     * Run BLE speed test and display results
+     * @param {Function} logCallback - Function to log messages
+     */
+    async runUISpeedTest(logCallback) {
+        if (!this.isConnected) {
+            if (logCallback) logCallback('Cannot run speed test: not connected to BLE device', 'error');
+            return;
+        }
+        
+        if (logCallback) logCallback('Starting BLE speed test...');
+        
+        const results = await this.runSpeedTest();
+        
+        if (results) {
+            if (logCallback) logCallback(
+                `Speed test results: ${results.packetsSuccess}/${results.packetsTotal} packets, ` + 
+                `${results.bytesTransferred} bytes, ${results.speedBps.toFixed(2)} bytes/sec`,
+                'success'
+            );
+        } else {
+            if (logCallback) logCallback('Speed test failed', 'error');
+        }
+    }
+
+    /**
      * Set callback for connection event
      * @param {Function} callback - Function to call on connection
      */

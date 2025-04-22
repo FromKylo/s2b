@@ -393,6 +393,101 @@ class BrailleTranslation {
         
         return null;
     }
+
+    /**
+     * Filter words in the database based on a search term
+     * @param {string} filterTerm - Term to search for within words
+     * @param {number} limit - Maximum number of results to return
+     * @returns {Array} - Array of matching entries
+     */
+    filterDatabase(filterTerm, limit = 20) {
+        if (!filterTerm || typeof filterTerm !== 'string') return [];
+        
+        const normalizedTerm = filterTerm.toLowerCase().trim();
+        const results = [];
+        
+        // Check each language for matching words
+        for (const lang of this.languages) {
+            if (!this.brailleDatabase[lang]) continue;
+            
+            // Find words that contain the filter term
+            for (const word in this.brailleDatabase[lang]) {
+                if (word.toLowerCase().includes(normalizedTerm)) {
+                    results.push({
+                        word: word,
+                        lang: lang,
+                        braille: this.brailleDatabase[lang][word].braille || '',
+                        array: this.brailleDatabase[lang][word].array
+                    });
+                }
+                
+                // Limit the number of results
+                if (results.length >= limit) break;
+            }
+            
+            // Stop if we have enough results
+            if (results.length >= limit) break;
+        }
+        
+        return results;
+    }
+
+    /**
+     * Display matching database entries in UI
+     * @param {Array} entries - Array of matching database entries
+     * @param {Element} container - Container to display results in
+     * @returns {Element} The created results container
+     */
+    displayDatabaseResults(entries, container) {
+        // Create results table
+        const resultsTable = document.createElement('table');
+        resultsTable.className = 'filter-results';
+        
+        // Add table header
+        resultsTable.innerHTML = `
+            <thead>
+                <tr>
+                    <th>Word</th>
+                    <th>Language</th>
+                    <th>Braille</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+            </tbody>
+        `;
+        
+        // Add each result as a table row
+        const tbody = resultsTable.querySelector('tbody');
+        
+        if (entries && entries.length > 0) {
+            entries.forEach(entry => {
+                const row = document.createElement('tr');
+                
+                row.innerHTML = `
+                    <td>${entry.word}</td>
+                    <td>${entry.lang || 'UEB'}</td>
+                    <td>${entry.braille || ''}</td>
+                    <td><button class="test-entry-btn" data-word="${entry.word}">Test</button></td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+        } else {
+            // No results found
+            const row = document.createElement('tr');
+            row.innerHTML = `<td colspan="4" class="no-results">No matching entries found</td>`;
+            tbody.appendChild(row);
+        }
+        
+        // Append to container if provided
+        if (container) {
+            container.appendChild(resultsTable);
+        }
+        
+        return resultsTable;
+    }
+    
 }
 
 // Create global instance

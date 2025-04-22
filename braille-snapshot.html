@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Braille Snapshot - Children</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        header {
+            background-color: #007bff;
+            color: white;
+            width: 100%;
+            padding: 15px 0;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            margin: 0;
+        }
+
+        .output-container {
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 30px;
+            width: 90%;
+            max-width: 600px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .word-display {
+            font-size: 36px;
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .word-info {
+            margin-bottom: 20px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .braille-cells-container {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .braille-cell {
+            width: 50px;
+            height: 80px;
+            background: #f9f9f9;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            padding: 10px;
+            position: relative;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            gap: 5px;
+        }
+
+        .braille-dot {
+            width: 16px;
+            height: 16px;
+            background-color: #e0e0e0;
+            border-radius: 50%;
+            margin: 3px;
+        }
+
+        .braille-dot.active {
+            background-color: #007bff;
+            box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+        }
+
+        .braille-info {
+            margin-top: 20px;
+            font-style: italic;
+            color: #666;
+        }
+
+        .language-badge {
+            display: inline-block;
+            background-color: #e0f7fa;
+            color: #00838f;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .unicode-display {
+            margin: 15px 0;
+            font-size: 50px;
+            letter-spacing: 10px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Speech to Braille</h1>
+    </header>
+
+    <div class="output-container">
+        <h2>Braille Output</h2>
+        
+        <div class="word-display">
+            Children
+            <div class="word-info">
+                <span class="language-badge">UEB</span>
+            </div>
+        </div>
+        
+        <div class="unicode-display">
+            ⠉⠗
+        </div>
+        
+        <div class="braille-cells-container">
+            <!-- First cell: dots 1 and 4 are active -->
+            <div class="braille-cell">
+                <div class="braille-dot active" data-dot="1"></div>
+                <div class="braille-dot" data-dot="2"></div>
+                <div class="braille-dot" data-dot="3"></div>
+                <div class="braille-dot active" data-dot="4"></div>
+                <div class="braille-dot" data-dot="5"></div>
+                <div class="braille-dot" data-dot="6"></div>
+            </div>
+            
+            <!-- Second cell: dots 1, 2, 3, and 5 are active -->
+            <div class="braille-cell">
+                <div class="braille-dot active" data-dot="1"></div>
+                <div class="braille-dot active" data-dot="2"></div>
+                <div class="braille-dot active" data-dot="3"></div>
+                <div class="braille-dot" data-dot="4"></div>
+                <div class="braille-dot active" data-dot="5"></div>
+                <div class="braille-dot" data-dot="6"></div>
+            </div>
+        </div>
+        
+        <div class="braille-info">
+            <p>Pattern: [[1,4],[1,2,3,5]]</p>
+            <p>Short Form: cr</p>
+        </div>
+    </div>
+    
+    <div class="braille-reference">
+        <h3>Braille Cell Reference</h3>
+        <p>Standard braille cell dot positions:</p>
+        <pre>
+        1 ⚫ ⚫ 2
+        3 ⚫ ⚫ 4
+        5 ⚫ ⚫ 6
+        </pre>
+    </div>
+</body>
+</html>
