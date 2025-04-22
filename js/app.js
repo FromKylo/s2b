@@ -43,7 +43,8 @@ class SpeechToBrailleApp {
             debugConsole: document.getElementById('debug-console'),
             debugOutput: document.getElementById('debug-output'),
             debugCommand: document.getElementById('debug-command'),
-            sendCommand: document.getElementById('send-command')
+            sendCommand: document.getElementById('send-command'),
+            mainActionButton: document.getElementById('main-action-button') // Add this line for the middle button
         };
         
         // Add mobile-specific UI elements
@@ -139,6 +140,9 @@ class SpeechToBrailleApp {
             // Ensure debug console exists and is properly initialized
             this.ensureDebugConsoleExists();
             
+            // Create main action button if it doesn't exist
+            this.createMainActionButton();
+            
             // Check for microphone permission before proceeding
             const permissionStatus = await speechRecognition.checkMicrophonePermission();
             if (permissionStatus === 'granted') {
@@ -154,6 +158,31 @@ class SpeechToBrailleApp {
         } catch (error) {
             this.log(`Error initializing modules: ${error.message}`, 'error');
             console.error('Initialization error:', error);
+        }
+    }
+
+    /**
+     * Create the main action button if it doesn't exist
+     */
+    createMainActionButton() {
+        if (!this.elements.mainActionButton) {
+            const mainActionButton = document.createElement('button');
+            mainActionButton.id = 'main-action-button';
+            mainActionButton.className = 'main-action-button';
+            mainActionButton.textContent = 'Start Recording';
+            
+            // Add to intro phase and recording phase
+            const introContent = this.elements.phaseContainers[PHASE.INTRODUCTION].querySelector('.phase-content');
+            if (introContent) {
+                introContent.appendChild(mainActionButton.cloneNode(true));
+            }
+            
+            const recordingContent = this.elements.phaseContainers[PHASE.RECORDING].querySelector('.phase-content');
+            if (recordingContent) {
+                recordingContent.appendChild(mainActionButton);
+            }
+            
+            this.elements.mainActionButton = mainActionButton;
         }
     }
 
@@ -227,14 +256,18 @@ class SpeechToBrailleApp {
             }
         }
         
+        // Update element reference
+        this.elements.debugToggle = toggleDebug;
+        this.elements.debugConsole = debugConsole;
+        this.elements.debugOutput = document.getElementById('debug-output');
+        
         // Ensure event listener for toggle button
         toggleDebug.addEventListener('click', () => {
             debugConsole.classList.toggle('hidden');
             this.log('Debug console toggled via button', 'debug');
         });
         
-        // Ensure F12 key handling is working
-        this.log('Debug console is ready and can be toggled with F12 or the button', 'info');
+        this.log('Debug console is ready and can be toggled with the debug button', 'info');
     }
 
     /**
@@ -269,8 +302,8 @@ class SpeechToBrailleApp {
                     // Visual feedback for match found
                     this.flashWordFound(word);
                     
-                    // Transition to output phase
-                    this.outputUI.transitionToOutputPhase(word, pattern);
+                    // Note: We're no longer auto-transitioning here
+                    // Instead the user will press the button to go to output phase
                 }
             }
         });
@@ -295,8 +328,9 @@ class SpeechToBrailleApp {
                     // Visual feedback for match found
                     this.flashWordFound(lastWord);
                     
-                    // Transition to output phase
-                    this.outputUI.transitionToOutputPhase(lastWord, pattern);
+                    // Store the current word and pattern for when the user presses the button
+                    this.currentWord = lastWord;
+                    this.currentPattern = pattern;
                 }
             }
         });
@@ -361,14 +395,16 @@ class SpeechToBrailleApp {
      */
     bindEvents() {
         // BLE connection button
-        this.elements.connectButton.addEventListener('click', () => {
-            if (bleConnection.isConnected) {
-                bleConnection.disconnect();
-            } else {
-                this.bleUI.updateBLEStatus('connecting', 'Connecting...');
-                bleConnection.connect();
-            }
-        });
+        if (this.elements.connectButton) {
+            this.elements.connectButton.addEventListener('click', () => {
+                if (bleConnection.isConnected) {
+                    bleConnection.disconnect();
+                } else {
+                    this.bleUI.updateBLEStatus('connecting', 'Connecting...');
+                    bleConnection.connect();
+                }
+            });
+        }
         
         // Press-to-talk button for mobile devices
         if (this.elements.talkButton) {
@@ -405,22 +441,40 @@ class SpeechToBrailleApp {
             });
         }
         
-        // Keyboard shortcuts
-        document.addEventListener('keydown', (event) => {
-            // F12 to toggle debug console
-            if (event.key === 'F12') {
-                event.preventDefault();
-                const debugConsole = document.getElementById('debug-console');
-                if (debugConsole) {
-                    debugConsole.classList.toggle('hidden');
-                    this.log('Debug console toggled via F12 key', 'debug');
-                } else {
-                    this.log('Debug console element not found in DOM', 'error');
-                    this.ensureDebugConsoleExists();
+        // Main action button in intro phase
+        const introActionButton = this.elements.phaseContainers[PHASE.INTRODUCTION].querySelector('#main-action-button');
+        if (introActionButton) {
+            introActionButton.addEventListener('click', () => {
+                // Clear intro countdown and transition to recording
+                if (this.introTimer) {
+                    clearInterval(this.introTimer);
                 }
-            }
-            
-            // Spacebar to connect/disconnect BLE (when not typing)
+                this.transitionToRecordingPhase();
+            });
+        }
+        
+        // Main action button in recording phase
+        const recordingActionButton = this.elements.phaseContainers[PHASE.RECORDING].querySelector('#main-action-button');
+        if (recordingActionButton) {
+            recordingActionButton.addEventListener('click', () => {
+                // If we have a recognized word, transition to output phase
+                if (this.currentWord && this.currentPattern) {
+                    this.showOutputPhase(this.currentWord, this.currentPattern);
+                } else {
+                    // Otherwise try to use a test word for demo
+                    const testWord = "example";
+                    const testPattern = brailleTranslation.translateWord(testWord);
+                    if (testPattern) {
+                        this.showOutputPhase(testWord, testPattern);
+                    } else {
+                        this.log("No word recognized yet. Please speak first.", "warning");
+                    }
+                }
+            });
+        }
+        
+        // Spacebar to connect/disconnect BLE (when not typing)
+        document.addEventListener('keydown', (event) => {
             if (event.code === 'Space' && document.activeElement.tagName !== 'INPUT') {
                 event.preventDefault();
                 if (bleConnection.isConnected) {
@@ -583,16 +637,14 @@ class SpeechToBrailleApp {
             rate: 1.1
         });
         
-        // Start countdown
-        this.introTimer = setInterval(() => {
-            this.countdownValue--;
-            this.elements.introCountdown.textContent = this.countdownValue;
-            
-            if (this.countdownValue <= 0) {
-                clearInterval(this.introTimer);
-                this.transitionToRecordingPhase();
-            }
-        }, 1000);
+        // Update main action button to show it's ready
+        const introActionButton = this.elements.phaseContainers[PHASE.INTRODUCTION].querySelector('#main-action-button');
+        if (introActionButton) {
+            introActionButton.textContent = 'Start Recording';
+            introActionButton.disabled = false;
+        }
+        
+        // No auto-countdown timer now - user must press the button
     }
 
     /**
@@ -612,6 +664,17 @@ class SpeechToBrailleApp {
         // Clear previous results
         this.elements.interimResult.textContent = '';
         this.elements.finalResult.textContent = '';
+        
+        // Reset current word and pattern
+        this.currentWord = null;
+        this.currentPattern = null;
+        
+        // Update main action button
+        const recordingActionButton = this.elements.phaseContainers[PHASE.RECORDING].querySelector('#main-action-button');
+        if (recordingActionButton) {
+            recordingActionButton.textContent = 'Show Output';
+            recordingActionButton.disabled = false;
+        }
         
         // Start listening - handle differently based on device type
         if (this.isPressToTalk) {
@@ -643,16 +706,7 @@ class SpeechToBrailleApp {
             }
         }, 500);
 
-        // Automatically transition to output phase after a delay
-        setTimeout(() => {
-            const testWord = "example"; // Example word for testing
-            const testPattern = brailleTranslation.translateWord(testWord); // Example pattern
-            if (testPattern) {
-                this.showOutputPhase(testWord, testPattern);
-            } else {
-                this.log(`No braille pattern found for word: "${testWord}"`, 'error');
-            }
-        }, 5000); // 5-second delay for demonstration
+        // No automatic transition to output phase - user must press the button
     }
 
     /**
@@ -742,8 +796,11 @@ class SpeechToBrailleApp {
             logElement.innerHTML = `<span class="timestamp">[${timestamp}]</span> ${message}`;
         }
         
-        document.getElementById('debug-output').appendChild(logElement);
-        document.getElementById('debug-output').scrollTop = document.getElementById('debug-output').scrollHeight;
+        const debugOutput = document.getElementById('debug-output');
+        if (debugOutput) {
+            debugOutput.appendChild(logElement);
+            debugOutput.scrollTop = debugOutput.scrollHeight;
+        }
         
         // Also log to console with appropriate method
         switch(type) {
@@ -772,15 +829,6 @@ class SpeechToBrailleApp {
                 this.log('Debug console toggled via button', 'debug');
             });
             
-            // Also handle F12 key
-            document.addEventListener('keydown', (event) => {
-                if (event.key === 'F12') {
-                    event.preventDefault();
-                    this.elements.debugConsole.classList.toggle('hidden');
-                    this.log('Debug console toggled via F12 key', 'debug');
-                }
-            });
-            
             this.log('Debug console toggle set up successfully', 'info');
         } else {
             this.log('Debug console elements not found, toggle not set up', 'error');
@@ -794,6 +842,11 @@ class SpeechToBrailleApp {
      */
     showOutputPhase(word, pattern) {
         this.log(`Showing output phase for word: "${word}"`, 'info');
+        
+        // Stop speech recognition if it's running
+        if (speechRecognition.isListening) {
+            speechRecognition.stopListening();
+        }
         
         // Use the outputUI to handle the transition
         if (this.outputUI) {
