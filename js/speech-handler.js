@@ -9,103 +9,113 @@
  * @param {string} variant - Optional variant of the cue ('success', 'failure')
  */
 function playAudioCue(type, variant) {
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-    
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-    
-    if (type === 'recording') {
-        // Recording start/stop sounds
-        if (variant === 'stop') {
-            oscillator.type = 'sine';
-            oscillator.frequency.value = 587.33; // D5 note
-            gainNode.gain.value = 0.1;
-            
-            oscillator.start();
-            // Frequency ramp down for stop sound
-            oscillator.frequency.linearRampToValueAtTime(440, audioContext.currentTime + 0.2); // Back to A4
-            
-            setTimeout(() => {
-                oscillator.stop();
-            }, 300);
-        } else {
-            // Default recording start sound
-            oscillator.type = 'sine';
-            oscillator.frequency.value = 440; // A4 note
-            gainNode.gain.value = 0.1;
-            
-            oscillator.start();
-            // Frequency ramp up for start sound
-            oscillator.frequency.linearRampToValueAtTime(587.33, audioContext.currentTime + 0.15); // D5 note
-            
-            setTimeout(() => {
-                oscillator.stop();
-            }, 300);
-        }
-    } else if (type === 'output') {
-        if (variant === 'failure') {
-            // Error/failure sound - falling tone
-            oscillator.type = 'triangle';
+    // Ensure we can create an audio context (might be blocked without user interaction)
+    try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        if (type === 'recording') {
+            // Recording start/stop sounds
+            if (variant === 'stop') {
+                oscillator.type = 'sine';
+                oscillator.frequency.value = 587.33; // D5 note
+                gainNode.gain.value = 0.1;
+                
+                oscillator.start();
+                // Frequency ramp down for stop sound
+                oscillator.frequency.linearRampToValueAtTime(440, audioContext.currentTime + 0.2); // Back to A4
+                
+                setTimeout(() => {
+                    oscillator.stop();
+                }, 300);
+            } else {
+                // Default recording start sound
+                oscillator.type = 'sine';
+                oscillator.frequency.value = 440; // A4 note
+                gainNode.gain.value = 0.1;
+                
+                oscillator.start();
+                // Frequency ramp up for start sound
+                oscillator.frequency.linearRampToValueAtTime(587.33, audioContext.currentTime + 0.15); // D5 note
+                
+                setTimeout(() => {
+                    oscillator.stop();
+                }, 300);
+            }
+        } else if (type === 'output') {
+            if (variant === 'failure') {
+                // Error/failure sound - falling tone
+                oscillator.type = 'triangle';
+                oscillator.frequency.value = 330; // E4 note
+                gainNode.gain.value = 0.1;
+                
+                oscillator.start();
+                // Frequency ramp down for failure sound
+                oscillator.frequency.linearRampToValueAtTime(220, audioContext.currentTime + 0.2); // A3 note
+                
+                setTimeout(() => {
+                    oscillator.stop();
+                }, 300);
+            } else {
+                // Success sound - chime up
+                oscillator.type = 'triangle';
+                oscillator.frequency.value = 659.25; // E5 note
+                gainNode.gain.value = 0.1;
+                
+                oscillator.start();
+                setTimeout(() => {
+                    oscillator.stop();
+                }, 300);
+                
+                // Play a second tone after a short delay
+                setTimeout(() => {
+                    const secondOscillator = audioContext.createOscillator();
+                    secondOscillator.connect(gainNode);
+                    secondOscillator.type = 'triangle';
+                    secondOscillator.frequency.value = 783.99; // G5 note
+                    
+                    secondOscillator.start();
+                    setTimeout(() => {
+                        secondOscillator.stop();
+                    }, 300);
+                }, 200);
+            }
+        } else if (type === 'no-match') {
+            oscillator.type = 'sawtooth';
             oscillator.frequency.value = 330; // E4 note
             gainNode.gain.value = 0.1;
             
             oscillator.start();
-            // Frequency ramp down for failure sound
-            oscillator.frequency.linearRampToValueAtTime(220, audioContext.currentTime + 0.2); // A3 note
-            
             setTimeout(() => {
                 oscillator.stop();
-            }, 300);
-        } else {
-            // Success sound - chime up
-            oscillator.type = 'triangle';
-            oscillator.frequency.value = 659.25; // E5 note
-            gainNode.gain.value = 0.1;
+            }, 200);
             
-            oscillator.start();
-            setTimeout(() => {
-                oscillator.stop();
-            }, 300);
-            
-            // Play a second tone after a short delay
+            // Play a second tone after a short delay for a distinctive "no match" sound
             setTimeout(() => {
                 const secondOscillator = audioContext.createOscillator();
                 secondOscillator.connect(gainNode);
-                secondOscillator.type = 'triangle';
-                secondOscillator.frequency.value = 783.99; // G5 note
+                secondOscillator.type = 'sawtooth';
+                secondOscillator.frequency.value = 220; // A3 note
                 
                 secondOscillator.start();
                 setTimeout(() => {
                     secondOscillator.stop();
-                }, 300);
-            }, 200);
+                }, 200);
+            }, 250);
         }
-    } else if (type === 'no-match') {
-        oscillator.type = 'sawtooth';
-        oscillator.frequency.value = 330; // E4 note
-        gainNode.gain.value = 0.1;
         
-        oscillator.start();
-        setTimeout(() => {
-            oscillator.stop();
-        }, 200);
-        
-        // Play a second tone after a short delay for a distinctive "no match" sound
-        setTimeout(() => {
-            const secondOscillator = audioContext.createOscillator();
-            secondOscillator.connect(gainNode);
-            secondOscillator.type = 'sawtooth';
-            secondOscillator.frequency.value = 220; // A3 note
-            
-            secondOscillator.start();
-            setTimeout(() => {
-                secondOscillator.stop();
-            }, 200);
-        }, 250);
+        console.log(`Audio cue played: ${type}${variant ? ' (' + variant + ')' : ''}`);
+    } catch (error) {
+        console.error('Failed to play audio cue:', error);
     }
 }
+
+// Make playAudioCue globally available
+window.playAudioCue = playAudioCue;
 
 class SpeechHandler {
     constructor(app) {

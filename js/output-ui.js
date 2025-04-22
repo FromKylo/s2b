@@ -455,8 +455,8 @@ class OutputUI {
         controls.appendChild(repeatButton);
         controls.appendChild(returnButton);
         
-        // Add controls to output phase
-        const outputContent = document.app.elements.phaseContainers[PHASE.OUTPUT].querySelector('.phase-content');
+        // Add controls to output phase - Fix: Using this.app instead of document.app
+        const outputContent = this.app.elements.phaseContainers[PHASE.OUTPUT].querySelector('.phase-content');
         outputContent.appendChild(controls);
     }
     

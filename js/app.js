@@ -775,6 +775,24 @@ class SpeechToBrailleApp {
             this.log('Debug console elements not found, toggle not set up', 'error');
         }
     }
+
+    /**
+     * Show the output phase with the recognized word and pattern
+     * @param {string} word - The recognized word
+     * @param {Array} pattern - The braille pattern
+     */
+    showOutputPhase(word, pattern) {
+        this.log(`Showing output phase for word: "${word}"`, 'info');
+        
+        // Use the outputUI to handle the transition
+        if (this.outputUI) {
+            this.outputUI.transitionToOutputPhase(word, pattern);
+        } else {
+            this.log('Error: outputUI not initialized', 'error');
+            // Fallback to just switching the phase
+            this.switchPhase(PHASE.OUTPUT);
+        }
+    }
 }
 
 // Initialize the app when the DOM is loaded

@@ -13,6 +13,15 @@ class DebugUI {
             debugCommand: document.getElementById('debug-command'),
             sendCommand: document.getElementById('send-command')
         };
+        
+        // Check if elements were found
+        if (!this.elements.debugToggle) {
+            console.error('Debug toggle button not found with ID "toggle-debug"');
+        }
+        if (!this.elements.debugConsole) {
+            console.error('Debug console element not found with ID "debug-console"');
+        }
+        
         this.bindEvents();
         this.setupUIControls();
     }
@@ -24,7 +33,10 @@ class DebugUI {
         // Debug console toggle
         if (this.elements.debugToggle) {
             this.elements.debugToggle.addEventListener('click', () => {
-                this.elements.debugConsole.classList.toggle('hidden');
+                if (this.elements.debugConsole) {
+                    this.elements.debugConsole.classList.toggle('hidden');
+                    this.app.log('Debug console toggled', 'debug');
+                }
             });
         }
         
