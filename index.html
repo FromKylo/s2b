@@ -97,12 +97,21 @@
         </div>
     </footer>
 
+    <!-- Load dependencies first -->
     <script src="js/braille-translation.js"></script>
     <script src="js/speech-recognition.js"></script>
     <script src="js/ble-connection.js"></script>
     <script src="js/speech-handler.js"></script>
     <script src="js/debug.js"></script>
+    
+    <!-- Load UI modules before the main application -->
+    <script src="js/ble-ui.js"></script>
+    <script src="js/debug-ui.js"></script>
+    <script src="js/output-ui.js"></script>
+    
+    <!-- Load main application -->
     <script src="js/app.js"></script>
+    
     <script>
         // Register service worker
         if ('serviceWorker' in navigator) {

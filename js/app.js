@@ -12,14 +12,11 @@ const PHASE = {
     PERMISSION: 'permission'
 };
 
-// Function playAudioCue has been moved to speech-handler.js
-
 class SpeechToBrailleApp {
     constructor() {
         // Current application state
         this.currentPhase = PHASE.INTRODUCTION;
         this.introTimer = null;
-        this.outputTimer = null;
         this.countdownValue = 8; // seconds
         this.isPressToTalk = false; // Whether we're using press-to-talk mode
         this.isMobileDevice = this.checkIfMobile();
@@ -33,16 +30,8 @@ class SpeechToBrailleApp {
                 [PHASE.OUTPUT]: document.getElementById('output-phase'),
                 [PHASE.PERMISSION]: document.getElementById('permission-phase'),
             },
-            bleStatus: document.getElementById('ble-status'),
             connectButton: document.getElementById('connect-ble'),
-            debugToggle: document.getElementById('toggle-debug'),
-            debugConsole: document.getElementById('debug-console'),
-            debugOutput: document.getElementById('debug-output'),
-            debugCommand: document.getElementById('debug-command'),
-            sendCommand: document.getElementById('send-command'),
-            runSpeedTest: document.getElementById('run-speed-test'),
             introCountdown: document.getElementById('intro-countdown'),
-            outputCountdown: document.getElementById('output-countdown'),
             interimResult: document.getElementById('interim-result'),
             finalResult: document.getElementById('final-result'),
             recognizedWord: document.getElementById('recognized-word'),
@@ -50,8 +39,11 @@ class SpeechToBrailleApp {
             audioWave: document.querySelector('.audio-wave'),
             permissionStatus: document.querySelector('.permission-status'),
             grantPermissionButton: document.getElementById('grant-permission'),
-            // Add braille test button reference
-            testButton: document.getElementById('braille-test-btn')
+            debugToggle: document.getElementById('toggle-debug'),
+            debugConsole: document.getElementById('debug-console'),
+            debugOutput: document.getElementById('debug-output'),
+            debugCommand: document.getElementById('debug-command'),
+            sendCommand: document.getElementById('send-command')
         };
         
         // Add mobile-specific UI elements
@@ -59,14 +51,19 @@ class SpeechToBrailleApp {
             this.createMobileUI();
         }
         
+        // Initialize UI modules
+        this.bleUI = new BLEUI(this);
+        this.debugUI = new DebugUI(this);
+        this.outputUI = new OutputUI(this);
+        
         // Initialize modules
         this.initializeModules();
         
         // Bind events
         this.bindEvents();
-
-        // Set up additional UI controls
-        this.setupUIControls();
+        
+        // Explicitly set up the debug console toggle
+        this.setupDebugConsoleToggle();
     }
 
     /**
@@ -137,7 +134,10 @@ class SpeechToBrailleApp {
             this.setupSpeechRecognition();
             
             // Set up BLE callbacks
-            this.setupBLECallbacks();
+            this.bleUI.setupBLECallbacks();
+
+            // Ensure debug console exists and is properly initialized
+            this.ensureDebugConsoleExists();
             
             // Check for microphone permission before proceeding
             const permissionStatus = await speechRecognition.checkMicrophonePermission();
@@ -155,6 +155,86 @@ class SpeechToBrailleApp {
             this.log(`Error initializing modules: ${error.message}`, 'error');
             console.error('Initialization error:', error);
         }
+    }
+
+    /**
+     * Ensure debug console exists in DOM and is properly set up
+     */
+    ensureDebugConsoleExists() {
+        // Check if debug console exists
+        let debugConsole = document.getElementById('debug-console');
+        if (!debugConsole) {
+            this.log('Debug console not found in DOM. Creating it...', 'warning');
+            
+            // Create the debug console if it doesn't exist
+            debugConsole = document.createElement('div');
+            debugConsole.id = 'debug-console';
+            debugConsole.className = 'debug-console hidden';
+            
+            // Create debug output area
+            const debugOutput = document.createElement('div');
+            debugOutput.id = 'debug-output';
+            debugConsole.appendChild(debugOutput);
+            
+            // Create input area
+            const debugInput = document.createElement('div');
+            debugInput.className = 'debug-input';
+            
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.id = 'debug-command';
+            input.placeholder = 'Enter command...';
+            
+            const sendBtn = document.createElement('button');
+            sendBtn.id = 'send-command';
+            sendBtn.textContent = 'Send';
+            
+            debugInput.appendChild(input);
+            debugInput.appendChild(sendBtn);
+            debugConsole.appendChild(debugInput);
+            
+            // Add to the footer or body
+            const footer = document.querySelector('footer');
+            if (footer) {
+                footer.appendChild(debugConsole);
+            } else {
+                document.body.appendChild(debugConsole);
+            }
+        }
+        
+        // Verify debug toggle button
+        let toggleDebug = document.getElementById('toggle-debug');
+        if (!toggleDebug) {
+            this.log('Debug toggle button not found. Creating it...', 'warning');
+            
+            // Create toggle button
+            toggleDebug = document.createElement('button');
+            toggleDebug.id = 'toggle-debug';
+            toggleDebug.className = 'secondary-btn';
+            toggleDebug.textContent = 'Debug Console';
+            
+            // Add to footer or body
+            const controlPanel = document.querySelector('.control-panel');
+            if (controlPanel) {
+                controlPanel.appendChild(toggleDebug);
+            } else {
+                const footer = document.querySelector('footer');
+                if (footer) {
+                    footer.appendChild(toggleDebug);
+                } else {
+                    document.body.appendChild(toggleDebug);
+                }
+            }
+        }
+        
+        // Ensure event listener for toggle button
+        toggleDebug.addEventListener('click', () => {
+            debugConsole.classList.toggle('hidden');
+            this.log('Debug console toggled via button', 'debug');
+        });
+        
+        // Ensure F12 key handling is working
+        this.log('Debug console is ready and can be toggled with F12 or the button', 'info');
     }
 
     /**
@@ -190,7 +270,7 @@ class SpeechToBrailleApp {
                     this.flashWordFound(word);
                     
                     // Transition to output phase
-                    this.transitionToOutputPhase(word, pattern);
+                    this.outputUI.transitionToOutputPhase(word, pattern);
                 }
             }
         });
@@ -216,7 +296,7 @@ class SpeechToBrailleApp {
                     this.flashWordFound(lastWord);
                     
                     // Transition to output phase
-                    this.transitionToOutputPhase(lastWord, pattern);
+                    this.outputUI.transitionToOutputPhase(lastWord, pattern);
                 }
             }
         });
@@ -277,26 +357,6 @@ class SpeechToBrailleApp {
     }
 
     /**
-     * Set up Bluetooth callbacks
-     */
-    setupBLECallbacks() {
-        bleConnection.onConnect(() => {
-            this.updateBLEStatus('connected', 'Connected');
-            this.log('BLE device connected');
-        });
-        
-        bleConnection.onDisconnect(() => {
-            this.updateBLEStatus('disconnected', 'Disconnected');
-            this.log('BLE device disconnected');
-        });
-        
-        bleConnection.onError((error) => {
-            this.updateBLEStatus('disconnected', 'Error');
-            this.log(`BLE error: ${error}`, 'error');
-        });
-    }
-
-    /**
      * Bind UI event handlers
      */
     bindEvents() {
@@ -305,47 +365,11 @@ class SpeechToBrailleApp {
             if (bleConnection.isConnected) {
                 bleConnection.disconnect();
             } else {
-                this.updateBLEStatus('connecting', 'Connecting...');
+                this.bleUI.updateBLEStatus('connecting', 'Connecting...');
                 bleConnection.connect();
             }
         });
         
-        // Test braille button
-        this.elements.testButton.addEventListener('click', () => {
-            this.runBrailleTest();
-        });
-        
-        // Debug console toggle
-        this.elements.debugToggle.addEventListener('click', () => {
-            this.elements.debugConsole.classList.toggle('hidden');
-        });
-        
-        // Send debug command
-        this.elements.sendCommand.addEventListener('click', () => {
-            const command = this.elements.debugCommand.value.trim();
-            if (command) {
-                this.sendDebugCommand(command);
-                this.elements.debugCommand.value = '';
-            }
-        });
-        
-        // Debug command input enter key
-        this.elements.debugCommand.addEventListener('keyup', (event) => {
-            if (event.key === 'Enter') {
-                const command = this.elements.debugCommand.value.trim();
-                if (command) {
-                    this.sendDebugCommand(command);
-                    this.elements.debugCommand.value = '';
-                }
-            }
-        });
-        
-        // Run BLE speed test
-        this.elements.runSpeedTest.addEventListener('click', () => {
-            this.runBLESpeedTest();
-        });
-        
-
         // Press-to-talk button for mobile devices
         if (this.elements.talkButton) {
             // Touch events for mobile
@@ -386,7 +410,14 @@ class SpeechToBrailleApp {
             // F12 to toggle debug console
             if (event.key === 'F12') {
                 event.preventDefault();
-                this.elements.debugConsole.classList.toggle('hidden');
+                const debugConsole = document.getElementById('debug-console');
+                if (debugConsole) {
+                    debugConsole.classList.toggle('hidden');
+                    this.log('Debug console toggled via F12 key', 'debug');
+                } else {
+                    this.log('Debug console element not found in DOM', 'error');
+                    this.ensureDebugConsoleExists();
+                }
             }
             
             // Spacebar to connect/disconnect BLE (when not typing)
@@ -570,7 +601,7 @@ class SpeechToBrailleApp {
     transitionToRecordingPhase() {
         // Clear any existing timers
         if (this.introTimer) clearInterval(this.introTimer);
-        if (this.outputTimer) clearInterval(this.outputTimer);
+        if (this.outputUI && this.outputUI.outputTimer) clearInterval(this.outputUI.outputTimer);
         
         // Switch to recording phase
         this.switchPhase(PHASE.RECORDING);
@@ -611,569 +642,6 @@ class SpeechToBrailleApp {
                 speechRecognition.speak('I\'m listening', { rate: 1.2 });
             }
         }, 500);
-    }
-
-    /**
-     * Transition to output phase
-     * @param {string} word - The recognized word
-     * @param {Array} pattern - The braille pattern
-     */
-    transitionToOutputPhase(word, pattern) {
-        // Debug logging for troubleshooting
-        this.log(`BEGIN OUTPUT PHASE TRANSITION for word: "${word}"`, 'debug');
-        
-        // Guard against null patterns
-        if (!pattern) {
-            this.log("ERROR: Null pattern provided to output phase", 'error');
-            console.error("Attempted to transition to output phase with null pattern");
-            
-            // Show a user-friendly error with fallback option
-            this.showOutputError(word);
-            return;
-        }
-        
-        this.log(`Pattern details: ${JSON.stringify(pattern)}`, 'debug');
-        
-        // Clear any existing timers
-        if (this.introTimer) {
-            clearInterval(this.introTimer);
-            this.log("Intro timer cleared", 'debug');
-        }
-        if (this.outputTimer) {
-            clearInterval(this.outputTimer);
-            this.log("Output timer cleared", 'debug');
-        }
-        
-        // Stop speech recognition temporarily
-        speechRecognition.stopListening();
-        this.log("Speech recognition stopped for output phase", 'debug');
-        
-        // Play output sound
-        if (pattern) {
-            playAudioCue('output', 'success');
-            this.log("Output success sound played", 'debug');
-        } else {
-            playAudioCue('output', 'failure');
-            this.log("Output failure sound played", 'debug');
-        }
-        
-        // Switch to output phase
-        this.log(`Switching to OUTPUT phase`, 'debug');
-        this.switchPhase(PHASE.OUTPUT);
-        
-        // Clear previous display content
-        this.elements.recognizedWord.innerHTML = '';
-        this.elements.brailleDisplay.innerHTML = '';
-        
-        // Display word and pattern
-        this.elements.recognizedWord.textContent = word;
-        this.log(`Word text set in UI: "${word}"`, 'debug');
-        
-        // Enhance word display with extra information
-        const wordInfo = document.createElement('div');
-        wordInfo.className = 'word-info';
-        wordInfo.innerHTML = `<span class="word-language">${brailleTranslation.currentLanguage}</span>`;
-        this.elements.recognizedWord.appendChild(wordInfo);
-        this.log(`Word language info added: ${brailleTranslation.currentLanguage}`, 'debug');
-        
-        // Add pronunciation button if available
-        if ('speechSynthesis' in window) {
-            const pronunciationBtn = document.createElement('button');
-            pronunciationBtn.className = 'pronunciation-btn';
-            pronunciationBtn.innerHTML = '<span class="icon">🔊</span> Say Word';
-            pronunciationBtn.addEventListener('click', () => {
-                speechRecognition.speak(word, { rate: 0.8 });
-            });
-            wordInfo.appendChild(pronunciationBtn);
-        }
-        
-        // Add favorite button
-        const favoriteBtn = document.createElement('button');
-        favoriteBtn.className = 'favorite-btn';
-        favoriteBtn.innerHTML = this.isWordFavorite(word) ? 
-            '<span class="icon">★</span> Favorited' : 
-            '<span class="icon">☆</span> Favorite';
-        
-        favoriteBtn.addEventListener('click', () => {
-            this.toggleFavoriteWord(word, pattern, favoriteBtn);
-        });
-        wordInfo.appendChild(favoriteBtn);
-        
-        // Add view details button (to show more information)
-        const detailsBtn = document.createElement('button');
-        detailsBtn.className = 'details-btn';
-        detailsBtn.innerHTML = '<span class="icon">ⓘ</span> Details';
-        detailsBtn.addEventListener('click', () => {
-            this.togglePatternDetails();
-        });
-        wordInfo.appendChild(detailsBtn);
-        
-        // Log the pattern for debugging
-        console.log("Braille pattern for output:", pattern);
-        
-        // Create container for braille cells with animation sequence
-        const brailleContainer = document.createElement('div');
-        brailleContainer.className = 'braille-cells-container';
-        this.elements.brailleDisplay.appendChild(brailleContainer);
-        
-        // Create debug information section in output display (hidden by default)
-        const debugInfo = document.createElement('div');
-        debugInfo.className = 'debug-info hidden';
-        debugInfo.id = 'pattern-details';
-        debugInfo.innerHTML = `
-            <div class="debug-label">Pattern Data:</div>
-            <pre>${JSON.stringify(pattern, null, 2)}</pre>
-        `;
-        this.elements.brailleDisplay.appendChild(debugInfo);
-        
-        // Render braille cells with animation
-        this.log(`Rendering braille pattern to display`, 'debug');
-        this.renderBrailleCellsWithAnimation(pattern, brailleContainer);
-        
-        // Send to BLE device if connected
-        if (bleConnection.isConnected) {
-            this.log(`Sending pattern to BLE device...`, 'debug');
-            bleConnection.sendBraillePattern(pattern)
-                .then(() => {
-                    this.log(`Pattern successfully sent to BLE device`, 'success');
-                    
-                    // Add visual indicator that pattern was sent to device
-                    const sentIndicator = document.createElement('div');
-                    sentIndicator.className = 'sent-to-device';
-                    sentIndicator.innerHTML = '<span class="icon">✓</span> Sent to device';
-                    this.elements.brailleDisplay.appendChild(sentIndicator);
-                    
-                    // Animate the indicator
-                    setTimeout(() => {
-                        sentIndicator.classList.add('active');
-                    }, 100);
-                })
-                .catch(error => {
-                    this.log(`ERROR sending pattern to BLE: ${error.message}`, 'error');
-                    
-                    // Show error to user
-                    const errorIndicator = document.createElement('div');
-                    errorIndicator.className = 'error-indicator';
-                    errorIndicator.innerHTML = '<span class="icon">⚠️</span> Failed to send to device';
-                    this.elements.brailleDisplay.appendChild(errorIndicator);
-                });
-        } else {
-            this.log(`Not sending to BLE - device not connected`, 'warning');
-            
-            // Show gentle reminder to connect device
-            const reminderElement = document.createElement('div');
-            reminderElement.className = 'device-reminder';
-            reminderElement.innerHTML = 'Connect a braille device to feel the pattern';
-            this.elements.brailleDisplay.appendChild(reminderElement);
-        }
-        
-        // Speak the word
-        speechRecognition.speak(word, { rate: 1.0 });
-        this.log(`TTS started for word: "${word}"`, 'debug');
-        
-        // Add output phase control buttons
-        this.addOutputPhaseControls();
-        
-        // Reset countdown
-        this.countdownValue = 8;
-        this.elements.outputCountdown.textContent = this.countdownValue;
-        this.log(`Output countdown reset to ${this.countdownValue}`, 'debug');
-        
-        // Start countdown
-        this.log(`Starting output countdown timer`, 'debug');
-        this.outputTimer = setInterval(() => {
-            this.countdownValue--;
-            this.elements.outputCountdown.textContent = this.countdownValue;
-            
-            // Add visual indication when time is running low
-            if (this.countdownValue <= 3) {
-                this.elements.outputCountdown.parentElement.classList.add('ending-soon');
-            }
-            
-            if (this.countdownValue <= 0) {
-                this.log(`Output countdown reached zero, cleaning up...`, 'debug');
-                clearInterval(this.outputTimer);
-                
-                // Clear BLE display if connected
-                if (bleConnection.isConnected) {
-                    this.log(`Clearing BLE display...`, 'debug');
-                    bleConnection.clearDisplay()
-                        .then(() => {
-                            this.log(`BLE display cleared successfully`, 'success');
-                        })
-                        .catch(error => {
-                            this.log(`Error clearing BLE display: ${error.message}`, 'error');
-                        });
-                }
-                
-                this.log(`Transitioning back to recording phase`, 'debug');
-                this.transitionToRecordingPhase();
-            }
-        }, 1000);
-        
-        this.log(`OUTPUT PHASE TRANSITION COMPLETE`, 'debug');
-    }
-    
-    /**
-     * Shows an error when a pattern couldn't be displayed
-     * @param {string} word - The word that failed to match
-     */
-    showOutputError(word) {
-        // Switch to output phase to show error
-        this.switchPhase(PHASE.OUTPUT);
-        
-        // Play failure sound
-        playAudioCue('output', 'failure');
-        
-        // Clear previous content
-        this.elements.recognizedWord.innerHTML = '';
-        this.elements.brailleDisplay.innerHTML = '';
-        
-        // Display word with error
-        this.elements.recognizedWord.textContent = word;
-        
-        // Add error indicator
-        const errorInfo = document.createElement('div');
-        errorInfo.className = 'word-info error';
-        errorInfo.innerHTML = `<span class="error-text">⚠️ No braille pattern found</span>`;
-        this.elements.recognizedWord.appendChild(errorInfo);
-        
-        // Show letter by letter option for multi-character words
-        if (word && word.length > 1) {
-            const letterByLetterBtn = document.createElement('button');
-            letterByLetterBtn.className = 'letter-by-letter-btn';
-            letterByLetterBtn.textContent = 'Try Letter by Letter';
-            letterByLetterBtn.addEventListener('click', () => {
-                this.showLetterByLetterView(word);
-            });
-            this.elements.brailleDisplay.appendChild(letterByLetterBtn);
-        }
-        
-        // Add button to return to listening
-        const returnButton = document.createElement('button');
-        returnButton.className = 'return-button';
-        returnButton.textContent = 'Return to Listening';
-        returnButton.addEventListener('click', () => {
-            clearInterval(this.outputTimer);
-            this.transitionToRecordingPhase();
-        });
-        this.elements.brailleDisplay.appendChild(returnButton);
-        
-        // Set short countdown
-        this.countdownValue = 5;
-        this.elements.outputCountdown.textContent = this.countdownValue;
-        
-        // Start countdown
-        this.outputTimer = setInterval(() => {
-            this.countdownValue--;
-            this.elements.outputCountdown.textContent = this.countdownValue;
-            
-            if (this.countdownValue <= 0) {
-                clearInterval(this.outputTimer);
-                this.transitionToRecordingPhase();
-            }
-        }, 1000);
-    }
-    
-    /**
-     * Show a letter-by-letter view for words without a whole pattern
-     * @param {string} word - The word to break down
-     */
-    showLetterByLetterView(word) {
-        // Clear display
-        this.elements.brailleDisplay.innerHTML = '';
-        
-        // Create container for letters
-        const lettersContainer = document.createElement('div');
-        lettersContainer.className = 'letters-container';
-        
-        // Process each letter
-        let hasValidLetters = false;
-        
-        // Add header
-        const header = document.createElement('h3');
-        header.textContent = 'Individual Letters';
-        lettersContainer.appendChild(header);
-        
-        // Process each letter
-        for (let i = 0; i < word.length; i++) {
-            const letter = word[i];
-            const pattern = brailleTranslation.translateWord(letter);
-            
-            // Create letter container
-            const letterBox = document.createElement('div');
-            letterBox.className = 'letter-box';
-            
-            // Add letter label
-            const letterLabel = document.createElement('div');
-            letterLabel.className = 'letter-label';
-            letterLabel.textContent = letter;
-            letterBox.appendChild(letterLabel);
-            
-            // Add braille pattern if available
-            const patternContainer = document.createElement('div');
-            patternContainer.className = 'letter-pattern';
-            
-            if (pattern) {
-                hasValidLetters = true;
-                brailleTranslation.renderBrailleCells(pattern, patternContainer);
-            } else {
-                patternContainer.innerHTML = '<span class="not-found">?</span>';
-            }
-            
-            letterBox.appendChild(patternContainer);
-            lettersContainer.appendChild(letterBox);
-        }
-        
-        this.elements.brailleDisplay.appendChild(lettersContainer);
-        
-        // Add guidance text
-        const guidanceText = document.createElement('p');
-        guidanceText.className = 'guidance-text';
-        
-        if (hasValidLetters) {
-            guidanceText.textContent = 'Some letters have braille patterns available. You can explore them individually.';
-        } else {
-            guidanceText.textContent = 'None of these letters have braille patterns in the current language.';
-        }
-        
-        this.elements.brailleDisplay.appendChild(guidanceText);
-        
-        // Reset countdown to give more time to explore
-        clearInterval(this.outputTimer);
-        this.countdownValue = 12;
-        this.elements.outputCountdown.textContent = this.countdownValue;
-        
-        // Restart countdown
-        this.outputTimer = setInterval(() => {
-            this.countdownValue--;
-            this.elements.outputCountdown.textContent = this.countdownValue;
-            
-            if (this.countdownValue <= 0) {
-                clearInterval(this.outputTimer);
-                this.transitionToRecordingPhase();
-            }
-        }, 1000);
-    }
-    
-    /**
-     * Toggle display of pattern details
-     */
-    togglePatternDetails() {
-        const detailsElement = document.getElementById('pattern-details');
-        if (detailsElement) {
-            detailsElement.classList.toggle('hidden');
-        }
-    }
-    
-    /**
-     * Add control buttons for the output phase
-     */
-    addOutputPhaseControls() {
-        // Check if controls already exist
-        if (document.getElementById('output-controls')) return;
-        
-        // Create controls container
-        const controls = document.createElement('div');
-        controls.id = 'output-controls';
-        controls.className = 'output-controls';
-        
-        // Add extend time button
-        const extendButton = document.createElement('button');
-        extendButton.className = 'extend-time-btn';
-        extendButton.innerHTML = '<span class="icon">⏱</span> +5 Seconds';
-        extendButton.addEventListener('click', () => {
-            // Add 5 seconds to countdown
-            this.countdownValue += 5;
-            this.elements.outputCountdown.textContent = this.countdownValue;
-            
-            // Remove "ending soon" warning if present
-            this.elements.outputCountdown.parentElement.classList.remove('ending-soon');
-            
-            // Provide feedback
-            extendButton.classList.add('clicked');
-            setTimeout(() => {
-                extendButton.classList.remove('clicked');
-            }, 300);
-        });
-        
-        // Add return button
-        const returnButton = document.createElement('button');
-        returnButton.className = 'return-btn';
-        returnButton.innerHTML = '<span class="icon">🔙</span> Return to Listening';
-        returnButton.addEventListener('click', () => {
-            clearInterval(this.outputTimer);
-            
-            // Clear BLE display if connected
-            if (bleConnection.isConnected) {
-                bleConnection.clearDisplay()
-                    .catch(error => {
-                        console.error('Error clearing display:', error);
-                    });
-            }
-            
-            this.transitionToRecordingPhase();
-        });
-        
-        // Add repeat button
-        const repeatButton = document.createElement('button');
-        repeatButton.className = 'repeat-btn';
-        repeatButton.innerHTML = '<span class="icon">🔁</span> Repeat Pattern';
-        repeatButton.addEventListener('click', async () => {
-            // Get the current word
-            const word = this.elements.recognizedWord.textContent;
-            
-            // Try to find pattern for the word
-            const pattern = brailleTranslation.translateWord(word);
-            
-            if (pattern && bleConnection.isConnected) {
-                // Visual feedback for button
-                repeatButton.classList.add('active');
-                
-                try {
-                    await bleConnection.clearDisplay();
-                    await new Promise(resolve => setTimeout(resolve, 300));
-                    await bleConnection.sendBraillePattern(pattern);
-                    playAudioCue('output', 'success');
-                } catch (error) {
-                    console.error('Error repeating pattern:', error);
-                }
-                
-                setTimeout(() => {
-                    repeatButton.classList.remove('active');
-                }, 500);
-            } else {
-                // Speak the word again as fallback
-                speechRecognition.speak(word, { rate: 1.0 });
-            }
-        });
-        
-        // Add buttons to container
-        controls.appendChild(extendButton);
-        controls.appendChild(repeatButton);
-        controls.appendChild(returnButton);
-        
-        // Add controls to output phase
-        const outputContent = this.elements.phaseContainers[PHASE.OUTPUT].querySelector('.phase-content');
-        outputContent.appendChild(controls);
-    }
-    
-    /**
-     * Check if a word is in favorites
-     * @param {string} word - The word to check
-     * @returns {boolean} - Whether the word is favorited
-     */
-    isWordFavorite(word) {
-        try {
-            const favorites = JSON.parse(localStorage.getItem('brailleFavorites')) || {};
-            return !!favorites[word];
-        } catch (e) {
-            console.error('Error checking favorites:', e);
-            return false;
-        }
-    }
-    
-    /**
-     * Toggle favorite status for a word
-     * @param {string} word - The word to favorite/unfavorite
-     * @param {Array} pattern - The braille pattern
-     * @param {HTMLElement} button - The button element
-     */
-    toggleFavoriteWord(word, pattern, button) {
-        try {
-            const favorites = JSON.parse(localStorage.getItem('brailleFavorites')) || {};
-            
-            if (favorites[word]) {
-                // Remove from favorites
-                delete favorites[word];
-                button.innerHTML = '<span class="icon">☆</span> Favorite';
-                this.log(`Removed "${word}" from favorites`, 'info');
-            } else {
-                // Add to favorites
-                favorites[word] = {
-                    pattern,
-                    language: brailleTranslation.currentLanguage,
-                    timestamp: Date.now()
-                };
-                button.innerHTML = '<span class="icon">★</span> Favorited';
-                this.log(`Added "${word}" to favorites`, 'success');
-                
-                // Animate the button
-                button.classList.add('favorited');
-                setTimeout(() => {
-                    button.classList.remove('favorited');
-                }, 700);
-            }
-            
-            localStorage.setItem('brailleFavorites', JSON.stringify(favorites));
-        } catch (e) {
-            console.error('Error toggling favorite:', e);
-            this.log(`Error saving favorites: ${e.message}`, 'error');
-        }
-    }
-    
-    /**
-     * Render braille cells with animation
-     * @param {Array} pattern - The braille pattern
-     * @param {HTMLElement} container - The container element
-     */
-    renderBrailleCellsWithAnimation(pattern, container) {
-        // If pattern is empty or invalid, show error
-        if (!pattern || !Array.isArray(pattern) || pattern.length === 0) {
-            const errorElement = document.createElement('div');
-            errorElement.className = 'braille-error';
-            errorElement.textContent = 'Invalid braille pattern';
-            container.appendChild(errorElement);
-            return;
-        }
-        
-        // Create cells container
-        const cellsContainer = document.createElement('div');
-        cellsContainer.className = 'braille-cells';
-        
-        // Render each cell with animation
-        pattern.forEach((cell, cellIndex) => {
-            // Create cell
-            const cellElement = document.createElement('div');
-            cellElement.className = 'braille-cell';
-            cellElement.setAttribute('data-cell-index', cellIndex);
-            
-            // Add animation delay based on index
-            cellElement.style.animationDelay = `${cellIndex * 0.1}s`;
-            
-            // Create dots
-            const dotsContainer = document.createElement('div');
-            dotsContainer.className = 'dots-container';
-            
-            // Position the dots in 2x3 grid (standard braille cell)
-            for (let i = 0; i < 6; i++) {
-                const dot = document.createElement('div');
-                dot.className = 'dot';
-                dot.setAttribute('data-dot-index', i);
-                
-                // Check if this dot is active
-                const isActive = cell.includes(i + 1); // +1 because braille dots are 1-indexed
-                if (isActive) {
-                    dot.classList.add('active');
-                    
-                    // Add animation delay for each dot
-                    dot.style.animationDelay = `${cellIndex * 0.1 + i * 0.05}s`;
-                }
-                
-                dotsContainer.appendChild(dot);
-            }
-            
-            cellElement.appendChild(dotsContainer);
-            cellsContainer.appendChild(cellElement);
-        });
-        
-        // Add to container with animation
-        container.appendChild(cellsContainer);
-        
-        // Add animation class after a small delay to trigger the animation
-        setTimeout(() => {
-            cellsContainer.classList.add('animated');
-        }, 50);
     }
 
     /**
@@ -1236,576 +704,13 @@ class SpeechToBrailleApp {
         } else {
             levelBar.style.width = '0%';
         }
-    } 
-
-    /**
-     * Update the BLE status indicator
-     * @param {string} status - Status class (connected, disconnected, connecting)
-     * @param {string} text - Status text to display
-     */ 
-    updateBLEStatus(status, text) {
-        this.elements.bleStatus.className = `status-indicator ${status}`;
-        this.elements.bleStatus.querySelector('.status-text').textContent = text;
-        
-        // Update connect button text
-        if (status === 'connected') {
-            this.elements.connectButton.textContent = 'Disconnect';
-        } else {
-            this.elements.connectButton.textContent = 'Connect Braille Display';
-        }
     }
 
     /**
      * Run a braille test sequence
      */ 
     async runBrailleTest() {
-        this.log('Starting braille test sequence');
-        
-        // Switch to output phase for the test
-        this.switchPhase(PHASE.OUTPUT);
-        
-        // Run the test
-        await brailleTranslation.runBrailleTest(
-            this.elements.brailleDisplay,
-            bleConnection.isConnected ? pattern => bleConnection.sendBraillePattern(pattern) : null
-        );
-        
-        this.log('Braille test sequence completed');
-        
-        // Return to recording phase
-        this.transitionToRecordingPhase();
-    }
-
-    /**
-     * Search the braille database for a word
-     * @param {string} word - The word to search for
-     * @returns {Object|null} - The matching database entry or null if not found
-     */
-    searchDatabase(word) {
-        this.log(`Searching database for: ${word}`);
-        
-        if (!word || typeof word !== 'string') {
-            this.log('Invalid search term', 'error');
-            return null;
-        }
-        
-        const result = brailleTranslation.findWordInDatabase(word);
-        
-        if (result) {
-            this.log(`Found match for "${word}" in database`, 'success');
-            return result;
-        } else {
-            this.log(`No match found for "${word}"`, 'warning');
-            return null;
-        }
-    }
- 
-    /**
-     * Display database search result in the UI
-     * @param {Object} result - The database search result
-     */ 
-    displayDatabaseResult(result, searchTerm) {
-        // Create or get result container
-        let resultContainer = document.getElementById('db-search-result');
-        if (!resultContainer) {
-            resultContainer = document.createElement('div');
-            resultContainer.id = 'db-search-result';
-            resultContainer.className = 'search-result';
-            this.elements.debugConsole.appendChild(resultContainer);
-        }
-        
-        if (!result) {
-            resultContainer.innerHTML = `<div class="not-found">No match found for "${searchTerm}"</div>`;
-            return;
-        }
-        
-        // Format and display the result
-        let html = `
-            <div class="result-item">
-                <h4>Found Match: "${result.word}"</h4>
-                <ul>
-                    <li><strong>Short Form:</strong> ${result.shortf || 'None'}</li>
-                    <li><strong>Braille:</strong> ${result.braille || 'None'}</li>
-                    <li><strong>Language:</strong> ${result.lang || 'UEB'}</li>
-                </ul>
-                <div class="braille-preview"></div>
-            </div>
-        `;
-        
-        resultContainer.innerHTML = html;
-        
-        // Render braille pattern if available
-        if (result.array) {
-            const previewElement = resultContainer.querySelector('.braille-preview');
-            brailleTranslation.renderBrailleCells(result.array, previewElement);
-        }
-    }
-
-    /**
-     * Send a debug command to the BLE device
-     * @param {string} command - The command to send
-     */
-    async sendDebugCommand(command) {
-        if (!command) return;
-        
-        // Log the command
-        this.log(`> ${command}`, 'command');
-        
-        // Process different command types
-        if (command.toLowerCase().startsWith('o:') || 
-            command.toLowerCase().startsWith('n:')) {
-            // Direct BLE commands
-            if (!bleConnection.isConnected) {
-                this.log('Cannot send command: BLE not connected', 'error');
-                return;
-            }
-            
-            try {
-                // Add detailed logging before sending
-                this.log(`Sending ${command.startsWith('O:') ? 'OUTPUT' : 'CLEAR'} command to device...`, 'debug');
-                this.log(`Command data: ${command}`, 'debug');
-                
-                // Send the command
-                await bleConnection.sendData(command);
-                this.log('Command sent successfully', 'success');
-                
-                // Show current phase for debugging
-                this.log(`Current phase: ${this.currentPhase}`, 'debug');
-            } catch (error) {
-                this.log(`Error sending command: ${error.message}`, 'error');
-            }
-        } 
-        else if (command.toLowerCase().startsWith('pins:')) {
-            // Pin control command
-            if (!bleConnection.isConnected) {
-                this.log('Cannot send pin command: BLE not connected', 'error');
-                return;
-            }
-            
-            try {
-                const params = command.substring(5).split(',').map(p => parseInt(p.trim()));
-                
-                if (params.length !== 3 || isNaN(params[0]) || isNaN(params[1]) || isNaN(params[2])) {
-                    this.log('Invalid format. Use: pins:cell,pin,value (e.g., pins:0,2,1)', 'error');
-                    return;
-                }
-                
-                const [cell, pin, value] = params;
-                
-                if (cell < 0 || cell > 2 || pin < 0 || pin > 5 || (value !== 0 && value !== 1)) {
-                    this.log('Invalid parameters. Cell: 0-2, Pin: 0-5, Value: 0-1', 'error');
-                    return;
-                }
-                
-                // Create direct pin command and send it using sendData
-                const pinCommand = `P:${cell},${pin},${value}`;
-                await bleConnection.sendData(pinCommand);
-                this.log(`Set cell ${cell} pin ${pin} to ${value}`, 'success');
-            } catch (error) {
-                this.log(`Error sending pin command: ${error.message}`, 'error');
-            }
-        }
-        else if (command.toLowerCase().startsWith('debug:')) {
-            // Debug specific commands
-            const debugParam = command.substring(6).trim().toLowerCase();
-            
-            if (debugParam === 'phase') {
-                // Show current application phase state
-                this.log(`Current phase: ${this.currentPhase}`, 'info');
-                this.log(`Containers active states:`, 'info');
-                
-                // Inspect phase containers
-                Object.keys(this.elements.phaseContainers).forEach(phase => {
-                    const container = this.elements.phaseContainers[phase];
-                    if (container) {
-                        this.log(`- ${phase}: ${container.classList.contains('active') ? 'ACTIVE' : 'inactive'}`, 'debug');
-                    }
-                });
-            }
-            else if (debugParam === 'output') {
-                // Debug output phase specifically
-                this.log('Output Phase Debug Information:', 'info');
-                this.log(`Current countdown value: ${this.countdownValue}`, 'debug');
-                this.log(`Output timer active: ${this.outputTimer !== null}`, 'debug');
-                this.log(`BLE connected: ${bleConnection.isConnected}`, 'debug');
-                this.log(`Current word displayed: "${this.elements.recognizedWord.textContent}"`, 'debug');
-                this.log(`Current display element contents: ${this.elements.brailleDisplay.children.length} cells`, 'debug');
-            }
-            else if (debugParam.startsWith('simulate')) {
-                // Simulate output phase with test data
-                const word = debugParam.split(':')[1] || 'test';
-                this.log(`Simulating output phase with word: "${word}"`, 'info');
-                
-                // Find pattern for word
-                const pattern = brailleTranslation.translateWord(word);
-                if (pattern) {
-                    this.transitionToOutputPhase(word, pattern);
-                } else {
-                    this.log(`No pattern found for word: ${word}`, 'error');
-                }
-            }
-            else {
-                this.log(`Unknown debug command: ${debugParam}`, 'error');
-                this.log(`Available debug commands: phase, output, simulate:word`, 'info');
-            }
-        }
-        else if (command.toLowerCase().startsWith('test:')) {
-            // Test commands
-            const testParam = command.substring(5).trim().toLowerCase();
-            
-            if (!testParam) {
-                this.log('Please specify a test parameter (e.g., test:a, test:alphabet, test:numbers)', 'error');
-                return;
-            }
-            
-            try {
-                if (testParam === 'alphabet') {
-                    this.log('Running alphabet test...', 'info');
-                    const container = document.createElement('div');
-                    container.className = 'debug-braille-output';
-                    this.elements.debugOutput.appendChild(container);
-                    
-                    await brailleTranslation.runAlphabetAndNumbersTest(
-                        container, 
-                        bleConnection.isConnected ? pattern => bleConnection.sendBraillePattern(pattern) : null
-                    );
-                    
-                    this.log('Alphabet test complete', 'success');
-                } 
-                else if (testParam === 'numbers') {
-                    this.log('Running numbers test...', 'info');
-                    const container = document.createElement('div');
-                    container.className = 'debug-braille-output';
-                    this.elements.debugOutput.appendChild(container);
-                    
-                    const numbers = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
-                    
-                    for (const num of numbers) {
-                        const pattern = brailleTranslation.translateWord(num);
-                        if (pattern) {
-                            this.log(`Testing number: ${num}`, 'info');
-                            brailleTranslation.renderBrailleCells(pattern, container);
-                            
-                            if (bleConnection.isConnected) {
-                                await bleConnection.sendBraillePattern(pattern);
-                            }
-                            
-                            await new Promise(resolve => setTimeout(resolve, 800));
-                        }
-                    }
-                    
-                    this.log('Numbers test complete', 'success');
-                } 
-                else {
-                    // Test a single character or word
-                    const pattern = brailleTranslation.translateWord(testParam);
-                    
-                    if (pattern) {
-                        this.log(`Testing pattern for: ${testParam}`, 'info');
-                        
-                        const container = document.createElement('div');
-                        container.className = 'debug-braille-output';
-                        
-                        // Create word label
-                        const label = document.createElement('div');
-                        label.className = 'debug-braille-label';
-                        label.textContent = testParam;
-                        container.appendChild(label);
-                        
-                        // Render braille pattern
-                        brailleTranslation.renderBrailleCells(pattern, container);
-                        
-                        this.elements.debugOutput.appendChild(container);
-                        
-                        // Send to hardware if connected
-                        if (bleConnection.isConnected) {
-                            await bleConnection.sendBraillePattern(pattern);
-                        }
-                    } else {
-                        this.log(`No pattern found for: ${testParam}`, 'error');
-                        
-                        // Try to be more helpful with suggestions
-                        this.log(`Trying to find alternative options...`, 'info');
-                        
-                        // Try letter by letter if it's a multi-character word
-                        if (testParam.length > 1) {
-                            this.log(`Breaking down "${testParam}" into individual letters:`, 'info');
-                            let foundAny = false;
-                            
-                            for (const letter of testParam) {
-                                const letterPattern = brailleTranslation.translateWord(letter);
-                                if (letterPattern) {
-                                    foundAny = true;
-                                    this.log(`- Letter "${letter}" found in database`, 'success');
-                                } else {
-                                    this.log(`- Letter "${letter}" not found in database`, 'warning');
-                                }
-                            }
-                            
-                            if (foundAny) {
-                                this.log(`Tip: Try testing individual letters (e.g., test:${testParam[0]})`, 'info');
-                            }
-                        }
-                        
-                        // Suggest using the search command for more details
-                        this.log(`Tip: Use 'search:${testParam}' to search the database with more details`, 'info');
-                        
-                        // Try to find similar words as suggestions
-                        const languages = brailleTranslation.getLanguages();
-                        this.log(`Currently using language: ${brailleTranslation.currentLanguage}`, 'info');
-                        this.log(`Try switching language with 'language:[${languages.join('|')}]'`, 'info');
-                    }
-                }
-            } catch (error) {
-                this.log(`Test error: ${error.message}`, 'error');
-            }
-        }
-        else if (command.toLowerCase().startsWith('search:')) {
-            const searchTerm = command.substring(7).trim();
-            
-            if (!searchTerm) {
-                this.log('Please specify a search term (e.g., search:hello)', 'error');
-                return;
-            }
-            
-            // Use brailleTranslation instead of brailleDB
-            const result = brailleTranslation.findWordInDatabase(searchTerm);
-            
-            if (result) {
-                const container = document.createElement('div');
-                container.className = 'debug-braille-output';
-                
-                // Format search result
-                const resultHTML = `
-                    <div class="search-result">
-                        <h3>${result.word}</h3>
-                        <ul>
-                            <li><strong>Language:</strong> ${result.lang}</li>
-                            <li><strong>Braille:</strong> ${result.braille || 'None'}</li>
-                            <li><strong>Array:</strong> ${JSON.stringify(result.array)}</li>
-                        </ul>
-                    </div>
-                `;
-                
-                container.innerHTML = resultHTML;
-                
-                // Add braille pattern visualization
-                const patternContainer = document.createElement('div');
-                patternContainer.className = 'braille-preview';
-                container.appendChild(patternContainer);
-                brailleTranslation.renderBrailleCells(result.array, patternContainer);
-                
-                this.elements.debugOutput.appendChild(container);
-                
-                // Send pattern to device if connected
-                if (bleConnection.isConnected) {
-                    const sendButton = document.createElement('button');
-                    sendButton.className = 'debug-send-btn';
-                    sendButton.textContent = 'Send to Device';
-                    sendButton.onclick = async () => {
-                        await bleConnection.sendBraillePattern(result.array);
-                        this.log(`Pattern sent: ${result.word}`, 'success');
-                    };
-                    container.appendChild(sendButton);
-                }
-            } else {
-                this.log(`No database entry found for: ${searchTerm}`, 'error');
-                
-                // Try to find similar entries using partial matching
-                const similarWords = [];
-                const languages = brailleTranslation.getLanguages();
-                
-                // Check each language for similar words
-                for (const lang of languages) {
-                    const langDb = brailleTranslation.brailleDatabase[lang] || {};
-                    
-                    // Look for words containing the search term
-                    for (const word in langDb) {
-                        if (word.includes(searchTerm)) {
-                            similarWords.push({ word, lang });
-                            if (similarWords.length >= 10) break; // Limit to 10 suggestions
-                        }
-                    }
-                    if (similarWords.length >= 10) break;
-                }
-                
-                if (similarWords.length > 0) {
-                    this.log(`Found ${similarWords.length} similar entries:`, 'info');
-                    const matchList = document.createElement('div');
-                    matchList.className = 'similar-matches';
-                    matchList.innerHTML = '<ul>' + 
-                        similarWords.map(m => `<li>${m.word} (${m.lang})</li>`).join('') + 
-                        '</ul>';
-                    this.elements.debugOutput.appendChild(matchList);
-                }
-            }
-        }
-        else if (command.toLowerCase().startsWith('language:')) {
-            const language = command.substring(9).trim();
-            
-            if (!language) {
-                // Just show available languages
-                const languages = brailleTranslation.getLanguages();
-                this.log(`Available languages: ${languages.join(', ')}`, 'info');
-                this.log(`Current language: ${brailleTranslation.currentLanguage}`, 'info');
-                return;
-            }
-            
-            if (brailleTranslation.setLanguage(language)) {
-                this.log(`Language set to: ${language}`, 'success');
-            } else {
-                const languages = brailleTranslation.getLanguages();
-                this.log(`Invalid language: ${language}. Available options: ${languages.join(', ')}`, 'error');
-            }
-        }
-        else if (command.toLowerCase().startsWith('filter:')) {
-            // New command to filter database directly
-            const filterTerm = command.substring(7).trim().toLowerCase();
-            
-            if (!filterTerm) {
-                this.log('Please specify a filter term (e.g., filter:a)', 'error');
-                return;
-            }
-            
-            // Use brailleTranslation instead of brailleDB
-            const filteredEntries = [];
-            const languages = brailleTranslation.getLanguages();
-            
-            // Check each language for matching words
-            for (const lang of languages) {
-                const langDb = brailleTranslation.brailleDatabase[lang] || {};
-                
-                // Find words that contain the filter term
-                for (const word in langDb) {
-                    if (word.toLowerCase().includes(filterTerm)) {
-                        filteredEntries.push({
-                            word: word,
-                            lang: lang,
-                            braille: langDb[word].braille || '',
-                            array: langDb[word].array
-                        });
-                    }
-                }
-            }
-            
-            if (filteredEntries && filteredEntries.length > 0) {
-                this.log(`Found ${filteredEntries.length} entries containing "${filterTerm}":`, 'info');
-                
-                // Create a table to display results
-                const resultsTable = document.createElement('table');
-                resultsTable.className = 'filter-results';
-                
-                // Add table header
-                resultsTable.innerHTML = `
-                    <thead>
-                        <tr>
-                            <th>Word</th>
-                            <th>Language</th>
-                            <th>Braille</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    </tbody>
-                `;
-                
-                // Add each result as a table row
-                const tbody = resultsTable.querySelector('tbody');
-                
-                // Show first 20 results max
-                const displayEntries = filteredEntries.slice(0, 20);
-                displayEntries.forEach(entry => {
-                    const row = document.createElement('tr');
-                    
-                    row.innerHTML = `
-                        <td>${entry.word}</td>
-                        <td>${entry.lang || 'UEB'}</td>
-                        <td>${entry.braille || ''}</td>
-                        <td><button class="test-entry-btn" data-word="${entry.word}">Test</button></td>
-                    `;
-                    
-                    tbody.appendChild(row);
-                });
-                
-                this.elements.debugOutput.appendChild(resultsTable);
-                
-                // Add event listeners to the test buttons
-                resultsTable.querySelectorAll('.test-entry-btn').forEach(btn => {
-                    btn.addEventListener('click', async () => {
-                        const wordToTest = btn.getAttribute('data-word');
-                        if (wordToTest) {
-                            // Use existing test command functionality
-                            await this.sendDebugCommand(`test:${wordToTest}`);
-                        }
-                    });
-                });
-                
-                // If there are more results than we displayed
-                if (filteredEntries.length > 20) {
-                    this.log(`Showing 20 of ${filteredEntries.length} total matches. Refine your filter for more specific results.`, 'info');
-                }
-            } else {
-                this.log(`No entries found containing "${filterTerm}"`, 'error');
-            }
-        }
-        else if (command.toLowerCase() === 'help') {
-            // Display help information
-            const helpText = `
-                <div class="debug-help">
-                    <h3>Debug Console Commands:</h3>
-                    <ul>
-                        <li><code>O:[[1,2,3]]</code> - Send output pattern directly</li>
-                        <li><code>N:[]</code> - Clear display (lower all dots)</li>
-                        <li><code>pins:cell,pin,value</code> - Control individual pin (e.g., pins:0,2,1)</li>
-                        <li><code>test:x</code> - Test character or word (e.g., test:a)</li>
-                        <li><code>test:alphabet</code> - Run through entire alphabet</li>
-                        <li><code>test:numbers</code> - Test all number representations</li>
-                        <li><code>search:word</code> - Search database for exact word</li>
-                        <li><code>filter:term</code> - Filter database for entries containing term</li>
-                        <li><code>language:X</code> - Set or view language (e.g., language:UEB)</li>
-                        <li><code>debug:phase</code> - Show current app phase state</li>
-                        <li><code>debug:output</code> - Show output phase debug info</li>
-                        <li><code>debug:simulate:word</code> - Simulate output phase with word</li>
-                        <li><code>clear</code> - Clear the console</li>
-                        <li><code>help</code> - Show this help text</li>
-                    </ul>
-                </div>
-            `;
-            const helpElement = document.createElement('div');
-            helpElement.innerHTML = helpText;
-            this.elements.debugOutput.appendChild(helpElement);
-        }
-        else if (command.toLowerCase() === 'clear') {
-            this.elements.debugOutput.innerHTML = '';
-        }
-        else {
-            this.log(`Unknown command: ${command}`, 'error');
-            this.log('Type "help" to see available commands', 'info');
-        }
-        
-        // Scroll to bottom after command execution
-        this.elements.debugOutput.scrollTop = this.elements.debugOutput.scrollHeight;
-    }
-
-    /**
-     * Run a BLE speed test
-     */
-    async runBLESpeedTest() {
-        if (!bleConnection.isConnected) {
-            this.log('Cannot run speed test: not connected to BLE device', 'error');
-            return;
-        }
-        
-        this.log('Starting BLE speed test...');
-        
-        const results = await bleConnection.runSpeedTest();
-        
-        if (results) {
-            this.log(`Speed test results: ${results.packetsSuccess}/${results.packetsTotal} packets, ` + 
-                     `${results.bytesTransferred} bytes, ${results.speedBps.toFixed(2)} bytes/sec`);
-        } else {
-            this.log('Speed test failed', 'error');
-        }
+        this.bleUI.runBrailleTest();
     }
 
     /**
@@ -1826,8 +731,8 @@ class SpeechToBrailleApp {
             logElement.innerHTML = `<span class="timestamp">[${timestamp}]</span> ${message}`;
         }
         
-        this.elements.debugOutput.appendChild(logElement);
-        this.elements.debugOutput.scrollTop = this.elements.debugOutput.scrollHeight;
+        document.getElementById('debug-output').appendChild(logElement);
+        document.getElementById('debug-output').scrollTop = document.getElementById('debug-output').scrollHeight;
         
         // Also log to console with appropriate method
         switch(type) {
@@ -1846,126 +751,28 @@ class SpeechToBrailleApp {
     }
 
     /**
-     * Set up additional UI controls
+     * Set up the debug console toggle
      */
-    setupUIControls() {
-        // Add handler for braille test button
-        const brailleTestBtn = document.getElementById('braille-test-btn');
-        if (brailleTestBtn) {
-            brailleTestBtn.addEventListener('click', async () => {
-                // Check if we're already in a test
-                if (this.isRunningTest) return;
-                
-                this.isRunningTest = true;
-                brailleTestBtn.disabled = true;
-                brailleTestBtn.textContent = 'Running Test...';
-                
-                try {
-                    // Switch to output phase to ensure proper display
-                    this.switchPhase(PHASE.OUTPUT);
-                    
-                    // Run the test
-                    await brailleTranslation.runAlphabetAndNumbersTest(
-                        this.elements.brailleDisplay,
-                        pattern => bleConnection.sendBraillePattern(pattern)
-                    );
-                    
-                    // Clear display when done
-                    setTimeout(() => {
-                        this.elements.brailleDisplay.innerHTML = '';
-                    }, 1000);
-                } catch (error) {
-                    console.error('Error running braille test:', error);
-                    this.log('Braille test error: ' + error.message, 'error');
-                } finally {
-                    // Re-enable button
-                    brailleTestBtn.disabled = false;
-                    brailleTestBtn.textContent = 'Test Braille Display';
-                    this.isRunningTest = false;
-                    
-                    // Return to recording phase
-                    setTimeout(() => {
-                        this.transitionToRecordingPhase();
-                    }, 2000);
+    setupDebugConsoleToggle() {
+        if (this.elements.debugToggle && this.elements.debugConsole) {
+            // Make sure the button exists and has event listener
+            this.elements.debugToggle.addEventListener('click', () => {
+                this.elements.debugConsole.classList.toggle('hidden');
+                this.log('Debug console toggled via button', 'debug');
+            });
+            
+            // Also handle F12 key
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'F12') {
+                    event.preventDefault();
+                    this.elements.debugConsole.classList.toggle('hidden');
+                    this.log('Debug console toggled via F12 key', 'debug');
                 }
             });
-        }
-        
-        // Add handler for cache management
-        const clearCacheBtn = document.getElementById('clear-cache-btn');
-        if (clearCacheBtn) {
-            clearCacheBtn.addEventListener('click', () => {
-                if (brailleTranslation.clearCache()) {
-                    this.log('Braille database cache cleared', 'success');
-                    
-                    // Reload database
-                    brailleTranslation.initialize().then(success => {
-                        if (success) {
-                            this.log('Database reloaded successfully', 'success');
-                        } else {
-                            this.log('Failed to reload database', 'error');
-                        }
-                    });
-                } else {
-                    this.log('Failed to clear cache', 'error');
-                }
-            });
-        }
-        
-        // Add database search UI to debug console
-        this.createDatabaseSearchUI();
-    }
-
-    /**
-     * Create UI elements for database search
-     */
-    createDatabaseSearchUI() {
-        // Create search container if it doesn't exist
-        let searchContainer = document.getElementById('db-search-container');
-        if (!searchContainer) {
-            searchContainer = document.createElement('div');
-            searchContainer.id = 'db-search-container';
-            searchContainer.className = 'debug-section';
             
-            searchContainer.innerHTML = `
-                <h3>Database Search</h3>
-                <div class="search-form">
-                    <input type="text" id="db-search-input" placeholder="Type a word to search">
-                    <button id="db-search-button">Search</button>
-                </div>
-            `;
-            
-            // Add to debug console before the debug output
-            this.elements.debugConsole.insertBefore(
-                searchContainer, 
-                this.elements.debugOutput
-            );
-            
-            // Add event listener to the search button
-            const searchButton = document.getElementById('db-search-button');
-            const searchInput = document.getElementById('db-search-input');
-            
-            if (searchButton && searchInput) {
-                // Search on button click
-                searchButton.addEventListener('click', () => {
-                    const searchTerm = searchInput.value.trim().toLowerCase();
-                    if (searchTerm) {
-                        const result = this.searchDatabase(searchTerm);
-                        this.displayDatabaseResult(result, searchTerm);
-                    }
-                });
-                
-                // Search on Enter key
-                searchInput.addEventListener('keyup', (event) => {
-                    if (event.key === 'Enter') {
-                        const searchTerm = searchInput.value.trim().toLowerCase();
-                        if (searchTerm) {
-                            const result = this.searchDatabase(searchTerm);
-                            this.displayDatabaseResult(result, searchTerm);
-                        }
-                    }
-                });
-            }
+            this.log('Debug console toggle set up successfully', 'info');
+        } else {
+            this.log('Debug console elements not found, toggle not set up', 'error');
         }
     }
 }
