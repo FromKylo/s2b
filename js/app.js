@@ -642,6 +642,17 @@ class SpeechToBrailleApp {
                 speechRecognition.speak('I\'m listening', { rate: 1.2 });
             }
         }, 500);
+
+        // Automatically transition to output phase after a delay
+        setTimeout(() => {
+            const testWord = "example"; // Example word for testing
+            const testPattern = brailleTranslation.translateWord(testWord); // Example pattern
+            if (testPattern) {
+                this.showOutputPhase(testWord, testPattern);
+            } else {
+                this.log(`No braille pattern found for word: "${testWord}"`, 'error');
+            }
+        }, 5000); // 5-second delay for demonstration
     }
 
     /**
