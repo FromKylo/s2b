@@ -324,6 +324,86 @@ nine,nine,⠼⠊,"[[3,4,5,6],[2,4]]",UEB`;
         
         console.log(`Processing ${words.length} words from speech: "${text}"`);
         
+        // If no words found, return a placeholder result to ensure output phase still shows
+        if (words.length === 0 || (words.length === 1 && words[0] === '')) {
+            return [{
+                word: "no speech detected",
+                found: false,
+                isEmpty: true
+            }];
+        }
+        
+        for (const word of words) {
+            // Skip empty words
+            if (!word) continue;
+            
+            // Clean the word of punctuation
+            const cleanWord = word.replace(/[^\w]/g, '');
+            if (cleanWord.length === 0) continue;
+            
+            // Find the braille pattern
+            const match = this.translateWord(cleanWord);
+            
+            // Add to results
+            if (match) {
+                results.push({
+                    word: cleanWord,
+                    array: match.array,
+                    found: true,
+                    lang: match.lang
+                });
+                console.log(`Found pattern for "${cleanWord}"`);
+            } else {
+                results.push({
+                    word: cleanWord, 
+                    found: false
+                });
+                console.log(`No pattern found for "${cleanWord}"`);
+            }
+        }
+        
+        return results;
+    }
+
+    /**
+     * Get the best match from processed speech results
+     * This helps the output phase always have something to display
+     * @param {Array} speechResults - Results from processRecognizedSpeech
+     * @returns {Object} - Best match or placeholder if no matches
+     */
+    getBestMatchForDisplay(speechResults) {
+        if (!speechResults || speechResults.length === 0) {
+            return { 
+                word: "no speech detected",
+                found: false,
+                isEmpty: true
+            };
+        }
+        
+        // First try to find any matched word
+        const foundMatch = speechResults.find(result => result.found);
+        if (foundMatch) {
+            return foundMatch;
+        }
+        
+        // If no matches, return the first result
+        return speechResults[0];
+    }
+
+    /**
+     * Process recognized speech to find matching braille patterns
+     * @param {string} text - The recognized speech text
+     * @returns {Array} - Array of words with their matching braille patterns
+     */
+    processRecognizedSpeech(text) {
+        if (!text || typeof text !== 'string') return [];
+        
+        // Split the text into words
+        const words = text.trim().toLowerCase().split(/\s+/);
+        const results = [];
+        
+        console.log(`Processing ${words.length} words from speech: "${text}"`);
+        
         for (const word of words) {
             // Skip empty words
             if (!word) continue;
