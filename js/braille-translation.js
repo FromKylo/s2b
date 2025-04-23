@@ -464,40 +464,7 @@ nine,nine,⠼⠊,"[[3,4,5,6],[2,4]]",UEB`;
                 }
             }
             
-            // If no match found and word has multiple characters, try character by character
-            if (word.length > 1) {
-                const letterArrays = [];
-                let allFound = true;
-                
-                for (const char of word) {
-                    // Try to find each character in the database
-                    const charMatch = this.findWordInDatabase(char);
-                    if (charMatch) {
-                        // For multi-cell characters, we need to flatten or extract the specific cell
-                        if (Array.isArray(charMatch.array[0])) {
-                            letterArrays.push(charMatch.array[0]); // Get first cell of pattern
-                        } else {
-                            letterArrays.push(charMatch.array);
-                        }
-                    } else {
-                        allFound = false;
-                        break;
-                    }
-                }
-                
-                // Only return if we found patterns for all characters
-                if (allFound && letterArrays.length === word.length) {
-                    console.log(`Built pattern for "${word}" character-by-character`);
-                    return {
-                        word: word,
-                        array: letterArrays,
-                        braille: '', // No Unicode representation for character-by-character
-                        shortf: '',
-                        lang: currentLanguage,
-                        isComposite: true
-                    };
-                }
-            }
+            // Character-by-character conversion feature has been removed
             
             console.log(`No pattern found for "${word}"`);
             return null;
