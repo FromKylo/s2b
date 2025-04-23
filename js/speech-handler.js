@@ -6,7 +6,8 @@ class SpeechHandler {
     constructor(app) {
         this.app = app;
         this.recognizer = window.speechRecognizer;
-        this.translator = window.brailleTranslator;
+        // Use brailleTranslation instead of window.brailleTranslator
+        this.translator = window.brailleTranslation;
         this.noMatchFeedbackTimeout = null;
     }
     
