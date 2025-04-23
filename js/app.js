@@ -1428,3 +1428,199 @@ class SpeechToBrailleApp {
 document.addEventListener('DOMContentLoaded', () => {
     window.app = new SpeechToBrailleApp();
 });
+
+/**
+ * Main application file for Speech to Braille
+ * Links speech recognition with braille translation
+ */
+
+// References to UI elements
+const recognizedTextElement = document.getElementById('recognized-text');
+const brailleOutputElement = document.getElementById('braille-output');
+const statusElement = document.getElementById('status');
+
+// Initialize components when the document is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('Initializing Speech to Braille application');
+    
+    // Initialize the braille database
+    if (brailleTranslation) {
+        brailleTranslation.initialize();
+        console.log('Braille database initialized');
+        updateStatus('Braille database loaded successfully');
+    } else {
+        console.error('Braille translation module not found');
+        updateStatus('Error: Braille module not loaded', true);
+    }
+    
+    // Connect to speech recognition if available
+    if (window.SpeechRecognitionManager) {
+        setupSpeechRecognition();
+    } else if (window.webkitSpeechRecognition) {
+        setupFallbackSpeechRecognition();
+    } else {
+        console.error('Speech recognition not supported in this browser');
+        updateStatus('Error: Speech recognition not supported in this browser', true);
+    }
+});
+
+/**
+ * Set up the speech recognition manager
+ */
+function setupSpeechRecognition() {
+    const speechRecognition = new SpeechRecognitionManager();
+    
+    // Set up callbacks for speech recognition results
+    speechRecognition.setOnFinalResult((text, confidence) => {
+        console.log(`Final speech result: "${text}" (confidence: ${confidence})`);
+        processRecognizedText(text);
+    });
+    
+    speechRecognition.setOnInterimResult((text) => {
+        console.log(`Interim speech result: "${text}"`);
+        displayRecognizedText(text, true);
+    });
+    
+    speechRecognition.setOnWordDetected((word, confidence, isFinal) => {
+        console.log(`Word detected: "${word}" (confidence: ${confidence}, final: ${isFinal})`);
+        if (word && word.length >= 2) {
+            processRecognizedWord(word, isFinal);
+        }
+    });
+    
+    // Set up start/stop listeners
+    document.getElementById('start-button')?.addEventListener('click', () => {
+        speechRecognition.startListening();
+        updateStatus('Listening...');
+    });
+    
+    document.getElementById('stop-button')?.addEventListener('click', () => {
+        speechRecognition.stopListening();
+        updateStatus('Listening stopped');
+    });
+    
+    // Start listening automatically if in a supported phase
+    if (window.currentPhase === 'recording') {
+        speechRecognition.startListening();
+        updateStatus('Listening...');
+    }
+}
+
+/**
+ * Process a recognized word and display braille patterns
+ */
+function processRecognizedWord(word, isFinal = false) {
+    if (!word || word.length === 0) return;
+    
+    // Process the word through the braille translation module
+    const match = brailleTranslation.translateWord(word);
+    
+    if (match) {
+        console.log(`Found braille pattern for: ${word}`);
+        
+        // Display visual braille pattern
+        if (brailleOutputElement) {
+            // Clear previous output for non-final results
+            if (!isFinal) {
+                brailleOutputElement.innerHTML = '';
+            }
+            
+            // Create a container for this word
+            const wordContainer = document.createElement('div');
+            wordContainer.className = 'braille-word';
+            
+            // Add the word text
+            const wordText = document.createElement('div');
+            wordText.className = 'word-text';
+            wordText.textContent = word;
+            
+            // Render the braille cells
+            const cellsContainer = document.createElement('div');
+            cellsContainer.className = 'cells-container';
+            brailleTranslation.renderBrailleCells(match, cellsContainer);
+            
+            // Add all elements to the container
+            wordContainer.appendChild(cellsContainer);
+            wordContainer.appendChild(wordText);
+            brailleOutputElement.appendChild(wordContainer);
+            
+            // Send to hardware if BLE connection is available
+            if (window.bleConnection && typeof window.bleConnection.sendBraillePattern === 'function') {
+                console.log('Sending to braille display:', match);
+                window.bleConnection.sendBraillePattern(JSON.stringify(match));
+            }
+        }
+    } else {
+        console.log(`No braille pattern found for: ${word}`);
+    }
+}
+
+/**
+ * Process full recognized text
+ */
+function processRecognizedText(text) {
+    if (!text || text.length === 0) return;
+    
+    // Display the recognized text
+    displayRecognizedText(text, false);
+    
+    // Process through the braille translation
+    const results = brailleTranslation.processRecognizedSpeech(text);
+    
+    if (results && results.length > 0) {
+        // Display the most recent word with a pattern
+        const matchingResults = results.filter(r => r.found);
+        if (matchingResults.length > 0) {
+            const lastMatch = matchingResults[matchingResults.length - 1];
+            
+            // Render the braille pattern for the matched word
+            if (brailleOutputElement) {
+                brailleOutputElement.innerHTML = '';
+                
+                const wordContainer = document.createElement('div');
+                wordContainer.className = 'braille-word';
+                
+                const wordText = document.createElement('div');
+                wordText.className = 'word-text';
+                wordText.textContent = lastMatch.word;
+                
+                const cellsContainer = document.createElement('div');
+                cellsContainer.className = 'cells-container';
+                brailleTranslation.renderBrailleCells(lastMatch.array, cellsContainer);
+                
+                wordContainer.appendChild(cellsContainer);
+                wordContainer.appendChild(wordText);
+                brailleOutputElement.appendChild(wordContainer);
+                
+                // Send to hardware if available
+                if (window.bleConnection && typeof window.bleConnection.sendBraillePattern === 'function') {
+                    console.log('Sending to braille display:', lastMatch.array);
+                    window.bleConnection.sendBraillePattern(JSON.stringify(lastMatch.array));
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Display recognized text in the UI
+ */
+function displayRecognizedText(text, isInterim = false) {
+    if (!recognizedTextElement) return;
+    
+    if (isInterim) {
+        recognizedTextElement.innerHTML = `<p>${text} <span class="interim-indicator">...</span></p>`;
+    } else {
+        recognizedTextElement.innerHTML = `<p>${text}</p>`;
+    }
+}
+
+/**
+ * Update status message
+ */
+function updateStatus(message, isError = false) {
+    if (!statusElement) return;
+    
+    statusElement.textContent = message;
+    statusElement.className = isError ? 'status error' : 'status';
+}

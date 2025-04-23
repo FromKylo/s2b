@@ -260,22 +260,31 @@ nine,nine,⠼⠊,"[[3,4,5,6],[2,4]]",UEB`;
     translateWord(word) {
         if (!word) return null;
         
-        // Try exact word match first
+        // Clean and normalize the input word
         word = word.toLowerCase().trim();
-        const lang = this.currentLanguage;
         
-        if (this.brailleDatabase[lang] && this.brailleDatabase[lang][word]) {
-            return this.brailleDatabase[lang][word].array;
+        // First try to find the exact word in the database (using the more comprehensive method)
+        const match = this.findWordInDatabase(word);
+        if (match) {
+            console.log(`Found exact match for "${word}": ${JSON.stringify(match.array)}`);
+            return match.array;
         }
         
-        // If not found and word has multiple characters, try character by character
+        // If no match found and word has multiple characters, try character by character
         if (word.length > 1) {
             const letterArrays = [];
             let allFound = true;
             
             for (const char of word) {
-                if (this.brailleDatabase[lang] && this.brailleDatabase[lang][char]) {
-                    letterArrays.push(this.brailleDatabase[lang][char].array[0]);
+                // Try to find each character in the database
+                const charMatch = this.findWordInDatabase(char);
+                if (charMatch) {
+                    // For multi-cell characters, we need to flatten or extract the specific cell
+                    if (Array.isArray(charMatch.array[0])) {
+                        letterArrays.push(charMatch.array[0]); // Get first cell of pattern
+                    } else {
+                        letterArrays.push(charMatch.array);
+                    }
                 } else {
                     allFound = false;
                     break;
@@ -284,12 +293,58 @@ nine,nine,⠼⠊,"[[3,4,5,6],[2,4]]",UEB`;
             
             // Only return if we found patterns for all characters
             if (allFound && letterArrays.length === word.length) {
+                console.log(`Built pattern for "${word}" character-by-character`);
                 return letterArrays;
             }
         }
         
-        // Otherwise return null
+        console.log(`No pattern found for "${word}"`);
         return null;
+    }
+
+    /**
+     * Process recognized speech to find matching braille patterns
+     * @param {string} text - The recognized speech text
+     * @returns {Array} - Array of words with their matching braille patterns
+     */
+    processRecognizedSpeech(text) {
+        if (!text || typeof text !== 'string') return [];
+        
+        // Split the text into words
+        const words = text.trim().toLowerCase().split(/\s+/);
+        const results = [];
+        
+        console.log(`Processing ${words.length} words from speech: "${text}"`);
+        
+        for (const word of words) {
+            // Skip empty words
+            if (!word) continue;
+            
+            // Clean the word of punctuation
+            const cleanWord = word.replace(/[^\w]/g, '');
+            if (cleanWord.length === 0) continue;
+            
+            // Find the braille pattern
+            const pattern = this.translateWord(cleanWord);
+            
+            // Add to results
+            if (pattern) {
+                results.push({
+                    word: cleanWord,
+                    array: pattern,
+                    found: true
+                });
+                console.log(`Found pattern for "${cleanWord}"`);
+            } else {
+                results.push({
+                    word: cleanWord, 
+                    found: false
+                });
+                console.log(`No pattern found for "${cleanWord}"`);
+            }
+        }
+        
+        return results;
     }
 
     /**
@@ -463,7 +518,7 @@ nine,nine,⠼⠊,"[[3,4,5,6],[2,4]]",UEB`;
         const normalizedWord = word.toLowerCase().trim();
         
         // Check each language, starting with the current one
-        const languages = [this.currentLanguage, ...Object.keys(this.brailleDatabase).filter(lang => lang !== this.currentLanguage)];
+        const languages = [this.currentLanguage, ...this.languages.filter(lang => lang !== this.currentLanguage)];
         
         for (const lang of languages) {
             if (this.brailleDatabase[lang] && this.brailleDatabase[lang][normalizedWord]) {
