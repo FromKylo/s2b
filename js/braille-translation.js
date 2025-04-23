@@ -22,22 +22,114 @@ class BrailleTranslation {
                 console.log('Braille database loaded from cache');
                 return true;
             }
-            
-            // If not in cache, load from CSV
-            const database = await this.loadFromCSV('braille-database.csv');
-            this.brailleDatabase = database;
-            console.log('Braille database loaded from CSV');
+
+            // If not in cache, load from embedded CSV
+            this.loadFromEmbeddedCSV();
+            console.log('Braille database loaded from embedded CSV');
             
             // Save to cache for future use
             this.saveToCache();
-            
+
             return true;
         } catch (error) {
             console.error('Error loading braille database:', error);
             return false;
         }
     }
-    
+
+    /**
+     * Load braille database from embedded CSV
+     */
+    loadFromEmbeddedCSV() {
+        const embeddedCSV = `
+word,shortf,braille,array,lang
+a,a,⠁,"[[1]]",UEB
+b,b,⠃,"[[1,2]]",UEB
+c,c,⠉,"[[1,4]]",UEB
+d,d,⠙,"[[1,4,5]]",UEB
+e,e,⠑,"[[1,5]]",UEB
+f,f,⠋,"[[1,2,4]]",UEB
+g,g,⠛,"[[1,2,4,5]]",UEB
+h,h,⠓,"[[1,2,5]]",UEB
+i,i,⠊,"[[2,4]]",UEB
+j,j,⠚,"[[2,4,5]]",UEB
+k,k,⠅,"[[1,3]]",UEB
+l,l,⠇,"[[1,2,3]]",UEB
+m,m,⠍,"[[1,3,4]]",UEB
+n,n,⠝,"[[1,3,4,5]]",UEB
+o,o,⠕,"[[1,3,5]]",UEB
+p,p,⠏,"[[1,2,3,4]]",UEB
+q,q,⠟,"[[1,2,3,4,5]]",UEB
+r,r,⠗,"[[1,2,3,5]]",UEB
+s,s,⠎,"[[2,3,4]]",UEB
+t,t,⠞,"[[2,3,4,5]]",UEB
+u,u,⠥,"[[1,3,6]]",UEB
+v,v,⠧,"[[1,2,3,6]]",UEB
+w,w,⠺,"[[2,4,5,6]]",UEB
+x,x,⠭,"[[1,3,4,6]]",UEB
+y,y,⠽,"[[1,3,4,5,6]]",UEB
+z,z,⠵,"[[1,3,5,6]]",UEB
+zero,zero,⠴,"[[3,4,5,6]]",UEB
+one,one,⠂,"[[2]]",UEB
+two,two,⠆,"[[2,3]]",UEB
+three,three,⠒,"[[2,5]]",UEB
+four,four,⠲,"[[2,5,6]]",UEB
+five,five,⠢,"[[2,6]]",UEB
+six,six,⠖,"[[2,3,5]]",UEB
+seven,seven,⠶,"[[2,3,5,6]]",UEB
+eight,eight,⠦,"[[2,5,6]]",UEB
+nine,nine,⠔,"[[2,3,6]]",UEB`;
+
+        this.brailleDatabase = this.parseCSV(embeddedCSV);
+    }
+
+    /**
+     * Parse CSV data into a structured database
+     * @param {string} csvText - The CSV text to parse
+     * @returns {Object} - Parsed braille database
+     */
+    parseCSV(csvText) {
+        const lines = csvText.trim().split('\n');
+        const headers = lines[0].split(',');
+
+        const database = {};
+
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+
+            const values = line.split(',');
+
+            if (values.length >= 5) {
+                const word = values[0].trim();
+                const shortf = values[1].trim();
+                const braille = values[2].trim();
+                let array;
+
+                try {
+                    array = JSON.parse(values[3].trim().replace(/'/g, '"'));
+                } catch (e) {
+                    console.warn(`Could not parse array for ${word}:`, e);
+                    array = [];
+                }
+
+                const lang = values[4].trim();
+
+                if (!database[lang]) {
+                    database[lang] = {};
+                }
+
+                database[lang][word] = {
+                    shortf,
+                    braille,
+                    array
+                };
+            }
+        }
+
+        return database;
+    }
+
     /**
      * Load braille database from cache
      * @returns {boolean} - True if loaded from cache successfully
