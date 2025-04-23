@@ -391,52 +391,6 @@ nine,nine,⠼⠊,"[[3,4,5,6],[2,4]]",UEB`;
     }
 
     /**
-     * Process recognized speech to find matching braille patterns
-     * @param {string} text - The recognized speech text
-     * @returns {Array} - Array of words with their matching braille patterns
-     */
-    processRecognizedSpeech(text) {
-        if (!text || typeof text !== 'string') return [];
-        
-        // Split the text into words
-        const words = text.trim().toLowerCase().split(/\s+/);
-        const results = [];
-        
-        console.log(`Processing ${words.length} words from speech: "${text}"`);
-        
-        for (const word of words) {
-            // Skip empty words
-            if (!word) continue;
-            
-            // Clean the word of punctuation
-            const cleanWord = word.replace(/[^\w]/g, '');
-            if (cleanWord.length === 0) continue;
-            
-            // Find the braille pattern
-            const match = this.translateWord(cleanWord);
-            
-            // Add to results
-            if (match) {
-                results.push({
-                    word: cleanWord,
-                    array: match.array,
-                    found: true,
-                    lang: match.lang
-                });
-                console.log(`Found pattern for "${cleanWord}"`);
-            } else {
-                results.push({
-                    word: cleanWord, 
-                    found: false
-                });
-                console.log(`No pattern found for "${cleanWord}"`);
-            }
-        }
-        
-        return results;
-    }
-
-    /**
      * Creates HTML for a visual braille cell representation
      * @param {Array} dotPattern - Array of dot numbers that are active
      * @returns {Element} - DOM element for the braille cell

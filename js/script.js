@@ -1,6 +1,5 @@
 /**
  * Start the output phase
- * Modified to always show for 3 seconds regardless of matches
  */
 function startOutputPhase() {
     // Process the recognized text for braille matches
@@ -24,14 +23,14 @@ function startOutputPhase() {
     
     // Send braille data to BLE device if connected
     if (window.bleHandler && window.bleHandler.isConnectedToBLE && brailleMatches.length > 0) {
-        // Get best match for display (could be empty)
+        // Get best match for display
         const bestMatch = brailleTranslation.getBestMatchForDisplay(brailleMatches);
         if (bestMatch && bestMatch.found) {
             window.bleHandler.sendBrailleToBLE(bestMatch);
         }
     }
     
-    // Reset countdown - Changed from 8 to 3 seconds as requested
+    // Reset countdown - Changed to 3 seconds as requested
     let countdown = 3;
     outputCountdown.textContent = countdown;
     
