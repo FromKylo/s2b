@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Speech to Braille Converter">
+    <meta name="theme-color" content="#007bff">
+    <title>Speech to Braille Converter</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="images/icon-192x192.png">
+</head>
+<body>
+    <header>
+        <h1>Speech to Braille</h1>
+        <div id="ble-status" class="status-indicator">BLE: Not Connected</div>
+        <div id="phase-status" class="status-indicator">Phase: Intro</div>
+    </header>
+
+    <main>
+        <!-- Introduction Phase -->
+        <section id="intro-phase" class="phase active">
+            <div class="intro-content">
+                <h2>Welcome to Speech to Braille</h2>
+                <p>This app converts your speech to braille patterns.</p>
+                <p>Ready to begin in <span id="intro-countdown">5</span> seconds...</p>
+            </div>
+        </section>
+
+        <!-- Recording Phase -->
+        <section id="recording-phase" class="phase">
+            <div class="recording-content">
+                <h2>Speak Now</h2>
+                <div class="mic-indicator">
+                    <div id="audio-wave" class="audio-wave">
+                        <div class="wave-bar"></div>
+                        <div class="wave-bar"></div>
+                        <div class="wave-bar"></div>
+                        <div class="wave-bar"></div>
+                        <div class="wave-bar"></div>
+                    </div>
+                </div>
+                <div id="recognized-text" class="recognized-text"></div>
+            </div>
+        </section>
+
+        <!-- Output Phase -->
+        <section id="output-phase" class="phase">
+            <div class="output-content">
+                <h2>Braille Output</h2>
+                <div id="braille-output" class="braille-output"></div>
+                <p class="countdown-text">Returning to recording in <span id="output-countdown">5</span> seconds...</p>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="controls">
+            <button id="connect-ble" class="control-btn">Connect BLE</button>
+            <button id="test-braille" class="control-btn">Test Display</button>
+            <button id="debug-mode" class="control-btn">Debug</button>
+        </div>
+    </footer>
+
+    <!-- Debug Console (hidden by default) -->
+    <div id="debug-console" class="debug-console hidden">
+        <div class="debug-header">
+            <h3>Debug Console</h3>
+            <button id="close-debug" class="close-btn">×</button>
+        </div>
+        <div id="debug-log" class="debug-log"></div>
+        <div class="debug-controls">
+            <input type="text" id="debug-input" placeholder="Enter command...">
+            <button id="send-debug" class="send-btn">Send</button>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/braille-translation.js"></script>
+    <script src="js/speech-recognition.js"></script>
+    <script src="js/ble-connection.js"></script>
+    <script src="js/app.js"></script>
+    <script>
+        // Register service worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/service-worker.js')
+              .then(reg => console.log('Service worker registered'))
+              .catch(err => console.log('Service worker registration failed:', err));
+        }
+    </script>
+</body>
+</html>
