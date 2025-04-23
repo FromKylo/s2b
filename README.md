@@ -8,7 +8,7 @@ This project consists of a Progressive Web App (PWA) and corresponding ESP32 fir
 s2b/
 ├── js/
 │   ├── app.js                  # Main application logic, phase management, UI control
-│   ├── ble-connection.js       # Handles Bluetooth Low Energy (BLE) communication
+│   ├── ble-handler.js       # Handles Bluetooth Low Energy (BLE) communication
 │   ├── braille-translation.js  # Loads database, translates words to Braille patterns
 │   └── speech-recognition.js   # Manages Web Speech API for voice input
 ├── sounds/                     # Audio feedback files (recording start/stop, success/failure)
@@ -37,13 +37,13 @@ s2b/
 *   **`styles.css`**: Contains all the CSS rules for styling the web application. It defines the layout, colors, fonts, animations, and appearance of different UI elements like buttons, phase containers, Braille cells, and status indicators.
 *   **`js/app.js`**: The core JavaScript file that orchestrates the application.
     *   Manages application phases (Introduction, Recording, Output, Test).
-    *   Initializes and coordinates other JavaScript modules (`ble-connection`, `braille-translation`, `speech-recognition`).
+    *   Initializes and coordinates other JavaScript modules (`ble-handler`, `braille-translation`, `speech-recognition`).
     *   Handles UI updates based on application state (e.g., showing/hiding phases, updating countdowns, displaying results).
     *   Binds event listeners for user interactions (button clicks, touch events).
     *   Manages timers for phase transitions.
     *   Provides logging functionality to the debug console.
     *   Handles mobile-specific UI adjustments (press-to-talk).
-*   **`js/ble-connection.js`**: Manages the connection to the ESP32 hardware via Bluetooth Low Energy (BLE).
+*   **`js/ble-handler.js`**: Manages the connection to the ESP32 hardware via Bluetooth Low Energy (BLE).
     *   Provides functions to connect, disconnect, and check connection status.
     *   Sends data (Braille patterns, commands) to the hardware device.
     *   Handles BLE events (connect, disconnect, error).
