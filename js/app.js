@@ -22,6 +22,9 @@ class SpeechToBrailleApp {
         this.isPressToTalk = false; // Whether we're using press-to-talk mode
         this.isMobileDevice = this.checkIfMobile();
         this.isRunningTest = false;
+        this.listeningDuration = 5000; // 5 seconds of listening time
+        this.isListeningActive = false;
+        this.listeningTimer = null;
         
         // DOM elements
         this.elements = {
@@ -90,7 +93,7 @@ class SpeechToBrailleApp {
         const talkButton = document.createElement('button');
         talkButton.id = 'press-to-talk';
         talkButton.className = 'talk-button';
-        talkButton.innerHTML = '<span>Hold to Talk</span>';
+        talkButton.innerHTML = '<span>Press to Talk</span>'; // Changed from "Hold to Talk"
         
         // Create audio level indicator
         const audioLevel = document.createElement('div');
@@ -354,9 +357,17 @@ class SpeechToBrailleApp {
 
         // Press-to-talk button for mobile devices
         if (this.elements.talkButton) {
-            // Touch events for mobile
+            // Replace touch and mouse events with click event
+            this.elements.talkButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.handleTalkButtonClick();
+            });
+            
+            // Remove the old touch/mouse events since we're using click now
+            // We can keep these commented here for reference
+            /*
             this.elements.talkButton.addEventListener('touchstart', (e) => {
-                e.preventDefault(); // Prevent default touch behavior
+                e.preventDefault();
                 this.handlePressTalkStart();
             });
             
@@ -365,7 +376,6 @@ class SpeechToBrailleApp {
                 this.handlePressTalkEnd();
             });
             
-            // Mouse events for desktop testing
             this.elements.talkButton.addEventListener('mousedown', () => {
                 this.handlePressTalkStart();
             });
@@ -374,7 +384,6 @@ class SpeechToBrailleApp {
                 this.handlePressTalkEnd();
             });
             
-            // Handle case where user moves finger out of button while pressing
             this.elements.talkButton.addEventListener('touchcancel', (e) => {
                 e.preventDefault();
                 this.handlePressTalkEnd();
@@ -385,6 +394,7 @@ class SpeechToBrailleApp {
                     this.handlePressTalkEnd();
                 }
             });
+            */
         }
         
         // Keyboard shortcuts
@@ -415,30 +425,136 @@ class SpeechToBrailleApp {
     }
 
     /**
-     * Handle the start of press-to-talk
+     * Handle talk button click for one-press listening
      */
-    handlePressTalkStart() {
+    handleTalkButtonClick() {
         if (this.currentPhase !== PHASE.RECORDING) return;
         
-        this.elements.talkButton.classList.add('active');
-        this.elements.talkButton.querySelector('span').textContent = 'Listening...';
-        
-        // Start recognition for this press
-        speechRecognition.startListening();
+        if (this.isListeningActive) {
+            // If already listening, stop it
+            this.stopListeningSession();
+        } else {
+            // Start a new listening session
+            this.startListeningSession();
+        }
     }
 
     /**
-     * Handle the end of press-to-talk
+     * Start a timed listening session
      */
-    handlePressTalkEnd() {
-        if (this.currentPhase !== PHASE.RECORDING) return;
+    startListeningSession() {
+        // Clear any existing timer
+        if (this.listeningTimer) {
+            clearTimeout(this.listeningTimer);
+        }
         
-        this.elements.talkButton.classList.remove('active');
-        this.elements.talkButton.querySelector('span').textContent = 'Hold to Talk';
+        // Update button state
+        this.isListeningActive = true;
+        this.updateTalkButtonState(true);
         
-        // Stop recognition when button is released
-        if (speechRecognition.isListening) {
-            speechRecognition.stopListening();
+        // Start speech recognition
+        speechRecognition.startListening();
+        
+        // Clear previous results
+        this.elements.interimResult.textContent = '';
+        this.elements.finalResult.textContent = '';
+        
+        // Set timeout to stop listening after predetermined time
+        this.listeningTimer = setTimeout(() => {
+            this.stopListeningSession();
+        }, this.listeningDuration);
+        
+        // Display countdown
+        this.startListeningCountdown(this.listeningDuration / 1000);
+        
+        // Log and feedback
+        this.log(`Listening for ${this.listeningDuration/1000} seconds...`);
+        this.sounds.recordingStart.play().catch(e => console.log('Error playing sound:', e));
+    }
+
+    /**
+     * Stop the current listening session
+     */
+    stopListeningSession() {
+        // Clear the timer
+        if (this.listeningTimer) {
+            clearTimeout(this.listeningTimer);
+            this.listeningTimer = null;
+        }
+        
+        // Stop the countdown
+        this.stopListeningCountdown();
+        
+        // Update button state
+        this.isListeningActive = false;
+        this.updateTalkButtonState(false);
+        
+        // Stop speech recognition
+        speechRecognition.stopListening();
+        
+        // Play sound feedback
+        this.sounds.recordingStop.play().catch(e => console.log('Error playing sound:', e));
+        
+        this.log('Listening session ended');
+    }
+
+    /**
+     * Start countdown display for listening session
+     * @param {number} seconds - Total seconds for countdown
+     */
+    startListeningCountdown(seconds) {
+        // Create or get countdown element
+        let countdownElement = document.getElementById('listening-countdown');
+        if (!countdownElement) {
+            countdownElement = document.createElement('div');
+            countdownElement.id = 'listening-countdown';
+            countdownElement.className = 'listening-countdown';
+            this.elements.phaseContainers[PHASE.RECORDING].appendChild(countdownElement);
+        }
+        
+        // Set initial count
+        let count = seconds;
+        countdownElement.textContent = `${count}s`;
+        countdownElement.style.display = 'block';
+        
+        // Update countdown every second
+        this.countdownInterval = setInterval(() => {
+            count--;
+            countdownElement.textContent = `${count}s`;
+            
+            if (count <= 0) {
+                this.stopListeningCountdown();
+            }
+        }, 1000);
+    }
+
+    /**
+     * Stop the listening countdown
+     */
+    stopListeningCountdown() {
+        if (this.countdownInterval) {
+            clearInterval(this.countdownInterval);
+            this.countdownInterval = null;
+        }
+        
+        const countdownElement = document.getElementById('listening-countdown');
+        if (countdownElement) {
+            countdownElement.style.display = 'none';
+        }
+    }
+
+    /**
+     * Update talk button state
+     */
+    updateTalkButtonState(isListening) {
+        if (!this.elements.talkButton) return;
+        
+        if (isListening) {
+            this.elements.talkButton.classList.add('active');
+            this.elements.talkButton.querySelector('span').textContent = 'Listening...';
+        } else {
+            this.elements.talkButton.classList.remove('active');
+            this.elements.talkButton.querySelector('span').textContent = 'Press to Talk';
         }
     }
 
@@ -525,21 +641,6 @@ class SpeechToBrailleApp {
                 default:
                     statusText.textContent = status;
             }
-        }
-    }
-
-    /**
-     * Update talk button state
-     */
-    updateTalkButtonState(isListening) {
-        if (!this.elements.talkButton) return;
-        
-        if (isListening) {
-            this.elements.talkButton.classList.add('active');
-            this.elements.talkButton.querySelector('span').textContent = 'Listening...';
-        } else {
-            this.elements.talkButton.classList.remove('active');
-            this.elements.talkButton.querySelector('span').textContent = 'Hold to Talk';
         }
     }
 
@@ -636,6 +737,11 @@ class SpeechToBrailleApp {
         }
         
         this.log(`Pattern details: ${JSON.stringify(pattern)}`, 'debug');
+        
+        // Stop the listening session if it's active
+        if (this.isListeningActive) {
+            this.stopListeningSession();
+        }
         
         // Clear any existing timers
         if (this.introTimer) {
