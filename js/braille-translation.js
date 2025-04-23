@@ -8,28 +8,16 @@ class BrailleTranslation {
         this.brailleDatabase = {};
         this.languages = ['UEB', 'Philippine'];
         this.currentLanguage = 'UEB';
-        this.cacheKey = 'braille_database_cache';
-        this.cacheVersion = '1.0'; // Update this when database structure changes
     }
 
     /**
      * Initialize the braille database
      */
-    async initialize() {
+    initialize() {
         try {
-            // Try to load from cache first
-            if (this.loadFromCache()) {
-                console.log('Braille database loaded from cache');
-                return true;
-            }
-
-            // If not in cache, load from embedded CSV
+            // Load from embedded CSV
             this.loadFromEmbeddedCSV();
             console.log('Braille database loaded from embedded CSV');
-            
-            // Save to cache for future use
-            this.saveToCache();
-
             return true;
         } catch (error) {
             console.error('Error loading braille database:', error);
@@ -127,111 +115,6 @@ nine,nine,⠔,"[[2,3,6]]",UEB`;
             }
         }
 
-        return database;
-    }
-
-    /**
-     * Load braille database from cache
-     * @returns {boolean} - True if loaded from cache successfully
-     */
-    loadFromCache() {
-        try {
-            const cacheData = localStorage.getItem(this.cacheKey);
-            if (!cacheData) return false;
-            
-            const cache = JSON.parse(cacheData);
-            
-            // Check if cache version matches
-            if (cache.version !== this.cacheVersion) {
-                console.log('Cache version mismatch, will reload from source');
-                return false;
-            }
-            
-            // Check if cache has expired (24 hours)
-            const now = new Date().getTime();
-            if (now - cache.timestamp > 24 * 60 * 60 * 1000) {
-                console.log('Cache expired, will reload from source');
-                return false;
-            }
-            
-            this.brailleDatabase = cache.data;
-            return true;
-        } catch (error) {
-            console.error('Error loading from cache:', error);
-            return false;
-        }
-    }
-    
-    /**
-     * Save braille database to cache
-     */
-    saveToCache() {
-        try {
-            const cache = {
-                version: this.cacheVersion,
-                timestamp: new Date().getTime(),
-                data: this.brailleDatabase
-            };
-            
-            localStorage.setItem(this.cacheKey, JSON.stringify(cache));
-            console.log('Braille database saved to cache');
-        } catch (error) {
-            console.error('Error saving to cache:', error);
-            // Cache errors are non-fatal, so we just log them
-        }
-    }
-
-    /**
-     * Load braille patterns from CSV file
-     * @param {string} url - The URL of the CSV file
-     * @returns {Promise<Object>} - The parsed braille database
-     */
-    async loadFromCSV(url) {
-        const response = await fetch(url);
-        const csvText = await response.text();
-        
-        // Parse CSV
-        const lines = csvText.split('\n');
-        const headers = lines[0].split(',');
-        
-        const database = {};
-        
-        for (let i = 1; i < lines.length; i++) {
-            const line = lines[i].trim();
-            if (!line) continue;
-            
-            // Handle quoted fields properly (simple approach)
-            const values = line.split(',');
-            
-            if (values.length >= 5) {
-                const word = values[0].trim();
-                const shortf = values[1].trim();
-                const braille = values[2].trim();
-                let array;
-                
-                try {
-                    // Parse the array from the CSV
-                    array = JSON.parse(values[3].trim().replace(/'/g, '"'));
-                } catch (e) {
-                    console.warn(`Could not parse array for ${word}:`, e);
-                    array = [];
-                }
-                
-                const lang = values[4].trim();
-                
-                // Add to appropriate language section
-                if (!database[lang]) {
-                    database[lang] = {};
-                }
-                
-                database[lang][word] = {
-                    shortf,
-                    braille,
-                    array
-                };
-            }
-        }
-        
         return database;
     }
 
