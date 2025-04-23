@@ -199,7 +199,20 @@ nine,nine,⠼⠊,"[[3,4,5,6],[2,4]]",UEB`;
          */
         parseCSV(csvText) {
             const lines = csvText.trim().split('\n');
-            const headers = lines[0].split(',');
+            const headers = lines[0].toLowerCase().split(',');
+            
+            // Find column indices from header
+            const wordIdx = headers.indexOf('word');
+            const shortfIdx = headers.indexOf('shortf');
+            const brailleIdx = headers.indexOf('braille');
+            const arrayIdx = headers.indexOf('array');
+            const langIdx = headers.indexOf('lang');
+            
+            // Validate required columns
+            if (wordIdx === -1 || arrayIdx === -1 || langIdx === -1) {
+                console.error('CSV is missing required columns. Found:', headers);
+                return {};
+            }
 
             const database = {};
 
@@ -207,22 +220,27 @@ nine,nine,⠼⠊,"[[3,4,5,6],[2,4]]",UEB`;
                 const line = lines[i].trim();
                 if (!line) continue;
 
-                const values = line.split(',');
+                // Parse line with proper handling of quoted fields
+                const values = this.parseCSVLine(line);
 
-                if (values.length >= 5) {
-                    const word = values[0].trim();
-                    const shortf = values[1].trim();
-                    const braille = values[2].trim();
-                    let array;
-
+                if (values.length > Math.max(wordIdx, arrayIdx, langIdx)) {
+                    const word = values[wordIdx].trim();
+                    const shortf = shortfIdx >= 0 && values[shortfIdx] ? values[shortfIdx].trim() : '';
+                    const braille = brailleIdx >= 0 && values[brailleIdx] ? values[brailleIdx].trim() : '';
+                    let arrayStr = values[arrayIdx].trim();
+                    const lang = values[langIdx].trim();
+                    
+                    let array = [];
+                    
+                    // Parse the array string to actual array
                     try {
-                        array = JSON.parse(values[3].trim().replace(/'/g, '"'));
+                        // Clean up the array string (remove additional quotes)
+                        arrayStr = arrayStr.replace(/^"|"$/g, '');
+                        array = JSON.parse(arrayStr);
                     } catch (e) {
                         console.warn(`Could not parse array for ${word}:`, e);
                         array = [];
                     }
-
-                    const lang = values[4].trim();
 
                     if (!database[lang]) {
                         database[lang] = {};
@@ -237,6 +255,37 @@ nine,nine,⠼⠊,"[[3,4,5,6],[2,4]]",UEB`;
             }
 
             return database;
+        },
+
+        /**
+         * Parse a CSV line properly handling quoted fields
+         * @param {string} line - A line from the CSV file
+         * @returns {Array} - Array of field values
+         */
+        parseCSVLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+            
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    // End of field
+                    result.push(current);
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            
+            // Don't forget the last field
+            result.push(current);
+            
+            // Clean up any remaining quotes
+            return result.map(field => field.replace(/"/g, '').trim());
         },
 
         /**
