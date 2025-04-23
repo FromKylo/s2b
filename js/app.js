@@ -12,6 +12,146 @@ const PHASE = {
     PERMISSION: 'permission'
 };
 
+// Sound service using Web Audio API
+const audioFeedback = {
+    context: null,
+    
+    init() {
+        // Create audio context
+        this.context = new (window.AudioContext || window.webkitAudioContext)();
+        console.log('Audio feedback service initialized');
+    },
+    
+    play(type) {
+        if (!this.context) {
+            this.init();
+        }
+        
+        // Resume context if suspended (needed for some browsers)
+        if (this.context.state === 'suspended') {
+            this.context.resume();
+        }
+        
+        const oscillator = this.context.createOscillator();
+        const gainNode = this.context.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(this.context.destination);
+        
+        switch (type) {
+            case 'recordingStart':
+                // Rising tone for recording start
+                oscillator.type = 'sine';
+                oscillator.frequency.value = 440; // A4 note
+                gainNode.gain.value = 0.1;
+                oscillator.start();
+                
+                // Frequency ramp up
+                oscillator.frequency.linearRampToValueAtTime(587.33, this.context.currentTime + 0.15); // D5
+                
+                setTimeout(() => {
+                    oscillator.stop();
+                }, 300);
+                break;
+                
+            case 'recordingStop':
+                // Falling tone for recording stop
+                oscillator.type = 'sine';
+                oscillator.frequency.value = 587.33; // D5
+                gainNode.gain.value = 0.1;
+                oscillator.start();
+                
+                // Frequency ramp down
+                oscillator.frequency.linearRampToValueAtTime(440, this.context.currentTime + 0.15); // A4
+                
+                setTimeout(() => {
+                    oscillator.stop();
+                }, 300);
+                break;
+                
+            case 'outputSuccess':
+                // Two ascending tones for success
+                oscillator.type = 'sine';
+                oscillator.frequency.value = 783.99; // G5
+                gainNode.gain.value = 0.1;
+                oscillator.start();
+                
+                setTimeout(() => {
+                    oscillator.stop();
+                }, 200);
+                
+                // Play a second higher tone after a short delay
+                setTimeout(() => {
+                    const secondOscillator = this.context.createOscillator();
+                    secondOscillator.connect(gainNode);
+                    secondOscillator.type = 'sine';
+                    secondOscillator.frequency.value = 1046.50; // C6
+                    
+                    secondOscillator.start();
+                    setTimeout(() => {
+                        secondOscillator.stop();
+                    }, 300);
+                }, 200);
+                break;
+                
+            case 'outputFailure':
+                // Error sound - falling tone
+                oscillator.type = 'triangle';
+                oscillator.frequency.value = 220; // A3 note
+                gainNode.gain.value = 0.1;
+                oscillator.start();
+                
+                setTimeout(() => {
+                    oscillator.stop();
+                }, 200);
+                
+                // Second lower tone for error
+                setTimeout(() => {
+                    const secondOscillator = this.context.createOscillator();
+                    secondOscillator.connect(gainNode);
+                    secondOscillator.type = 'sawtooth';
+                    secondOscillator.frequency.value = 174.61; // F3
+                    
+                    secondOscillator.start();
+                    setTimeout(() => {
+                        secondOscillator.stop();
+                    }, 300);
+                }, 250);
+                break;
+                
+            case 'connection':
+                // Connection success sound - two quick ascending tones
+                oscillator.type = 'sine';
+                oscillator.frequency.value = 440; // A4
+                gainNode.gain.value = 0.1;
+                oscillator.start();
+                
+                setTimeout(() => {
+                    oscillator.stop();
+                }, 100);
+                
+                // Second higher tone
+                setTimeout(() => {
+                    const secondOscillator = this.context.createOscillator();
+                    secondOscillator.connect(gainNode);
+                    secondOscillator.type = 'sine';
+                    secondOscillator.frequency.value = 880; // A5
+                    
+                    secondOscillator.start();
+                    setTimeout(() => {
+                        secondOscillator.stop();
+                    }, 200);
+                }, 100);
+                break;
+                
+            default:
+                console.warn('Unknown sound type:', type);
+        }
+        
+        return true;
+    }
+};
+
 class SpeechToBrailleApp {
     constructor() {
         // Current application state
@@ -60,13 +200,8 @@ class SpeechToBrailleApp {
             this.createMobileUI();
         }
         
-        // Audio feedback sounds
-        this.sounds = {
-            recordingStart: new Audio('sounds/recording-start.mp3'),
-            recordingStop: new Audio('sounds/recording-stop.mp3'),
-            outputSuccess: new Audio('sounds/output-success.mp3'),
-            outputFailure: new Audio('sounds/output-failure.mp3')
-        };
+        // Initialize audio feedback
+        audioFeedback.init();
         
         // Initialize modules
         this.initializeModules();
@@ -466,7 +601,7 @@ class SpeechToBrailleApp {
         
         // Log and feedback
         this.log(`Listening for ${this.listeningDuration/1000} seconds...`);
-        this.sounds.recordingStart.play().catch(e => console.log('Error playing sound:', e));
+        audioFeedback.play('recordingStart');
     }
 
     /**
@@ -490,7 +625,7 @@ class SpeechToBrailleApp {
         speechRecognition.stopListening();
         
         // Play sound feedback
-        this.sounds.recordingStop.play().catch(e => console.log('Error playing sound:', e));
+        audioFeedback.play('recordingStop');
         
         this.log('Listening session ended');
     }
@@ -680,7 +815,7 @@ class SpeechToBrailleApp {
         this.switchPhase(PHASE.RECORDING);
         
         // Play recording start sound
-        this.sounds.recordingStart.play().catch(e => console.log('Error playing sound:', e));
+        audioFeedback.play('recordingStart');
         
         // Clear previous results
         this.elements.interimResult.textContent = '';
@@ -757,16 +892,10 @@ class SpeechToBrailleApp {
         
         // Play output sound
         if (match && match.array) {
-            this.sounds.outputSuccess.play().catch(e => {
-                this.log(`Error playing success sound: ${e}`, 'error');
-                console.log('Error playing sound:', e);
-            });
+            audioFeedback.play('outputSuccess');
             this.log("Output success sound played", 'debug');
         } else {
-            this.sounds.outputFailure.play().catch(e => {
-                this.log(`Error playing failure sound: ${e}`, 'error');
-                console.log('Error playing sound:', e);
-            });
+            audioFeedback.play('outputFailure');
             this.log("Output failure sound played", 'debug');
         }
         
