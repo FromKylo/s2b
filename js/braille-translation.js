@@ -3,34 +3,41 @@
  * Handles loading the braille database and translating words to braille patterns
  */
 
-class BrailleTranslation {
-    constructor() {
-        this.brailleDatabase = {};
-        this.languages = ['UEB', 'Philippine'];
-        this.currentLanguage = 'UEB';
-        this.cacheKey = 'brailleDatabase_cache';
-    }
+// Create a function that returns braille translation object
+function createBrailleTranslation() {
+    // Private variables to store state
+    const brailleDatabase = {};
+    const languages = ['UEB', 'Philippine'];
+    let currentLanguage = 'UEB';
+    const cacheKey = 'brailleDatabase_cache';
+    
+    // Return an object with all the methods
+    return {
+        // Current language getter
+        get currentLanguage() {
+            return currentLanguage;
+        },
 
-    /**
-     * Initialize the braille database
-     */
-    async initialize() {
-        try {
-            // Load from embedded CSV
-            this.loadFromEmbeddedCSV();
-            console.log('Braille database loaded from embedded CSV');
-            return true;
-        } catch (error) {
-            console.error('Error loading braille database:', error);
-            return false;
-        }
-    }
+        /**
+         * Initialize the braille database
+         */
+        async initialize() {
+            try {
+                // Load from embedded CSV
+                this.loadFromEmbeddedCSV();
+                console.log('Braille database loaded from embedded CSV');
+                return true;
+            } catch (error) {
+                console.error('Error loading braille database:', error);
+                return false;
+            }
+        },
 
-    /**
-     * Load braille database from embedded CSV
-     */
-    loadFromEmbeddedCSV() {
-        const embeddedCSV = `word,shortf,braille,array,lang
+        /**
+         * Load braille database from embedded CSV
+         */
+        loadFromEmbeddedCSV() {
+            const embeddedCSV = `word,shortf,braille,array,lang
 a,a,⠁,"[[1]]",UEB
 b,b,⠃,"[[1,2]]",UEB
 c,c,⠉,"[[1,4]]",UEB
@@ -182,694 +189,695 @@ seven,seven,⠼⠛,"[[3,4,5,6],[1,2,4,5]]",UEB
 eight,eight,⠼⠓,"[[3,4,5,6],[1,2,5]]",UEB
 nine,nine,⠼⠊,"[[3,4,5,6],[2,4]]",UEB`;
 
-        this.brailleDatabase = this.parseCSV(embeddedCSV);
-    }
+            Object.assign(brailleDatabase, this.parseCSV(embeddedCSV));
+        },
 
-    /**
-     * Parse CSV data into a structured database
-     * @param {string} csvText - The CSV text to parse
-     * @returns {Object} - Parsed braille database
-     */
-    parseCSV(csvText) {
-        const lines = csvText.trim().split('\n');
-        const headers = lines[0].split(',');
+        /**
+         * Parse CSV data into a structured database
+         * @param {string} csvText - The CSV text to parse
+         * @returns {Object} - Parsed braille database
+         */
+        parseCSV(csvText) {
+            const lines = csvText.trim().split('\n');
+            const headers = lines[0].split(',');
 
-        const database = {};
+            const database = {};
 
-        for (let i = 1; i < lines.length; i++) {
-            const line = lines[i].trim();
-            if (!line) continue;
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
 
-            const values = line.split(',');
+                const values = line.split(',');
 
-            if (values.length >= 5) {
-                const word = values[0].trim();
-                const shortf = values[1].trim();
-                const braille = values[2].trim();
-                let array;
+                if (values.length >= 5) {
+                    const word = values[0].trim();
+                    const shortf = values[1].trim();
+                    const braille = values[2].trim();
+                    let array;
 
-                try {
-                    array = JSON.parse(values[3].trim().replace(/'/g, '"'));
-                } catch (e) {
-                    console.warn(`Could not parse array for ${word}:`, e);
-                    array = [];
+                    try {
+                        array = JSON.parse(values[3].trim().replace(/'/g, '"'));
+                    } catch (e) {
+                        console.warn(`Could not parse array for ${word}:`, e);
+                        array = [];
+                    }
+
+                    const lang = values[4].trim();
+
+                    if (!database[lang]) {
+                        database[lang] = {};
+                    }
+
+                    database[lang][word] = {
+                        shortf,
+                        braille,
+                        array
+                    };
                 }
-
-                const lang = values[4].trim();
-
-                if (!database[lang]) {
-                    database[lang] = {};
-                }
-
-                database[lang][word] = {
-                    shortf,
-                    braille,
-                    array
-                };
             }
-        }
 
-        return database;
-    }
+            return database;
+        },
 
-    /**
-     * Set the preferred language for braille translation priority
-     * Note: The system always searches both English and Filipino languages,
-     * this setting only determines which language to prioritize when a word
-     * exists in both languages or when building character by character patterns.
-     * 
-     * @param {string} language - The language to prioritize ('UEB' for English or 'Philippine' for Filipino)
-     * @returns {boolean} - Whether the language was successfully set
-     */
-    setPrimaryLanguage(language) {
-        if (this.languages.includes(language)) {
-            this.currentLanguage = language;
-            console.log(`Primary language set to ${language}`);
-            return true;
-        }
-        return false;
-    }
+        /**
+         * Set the preferred language for braille translation priority
+         * Note: The system always searches both English and Filipino languages,
+         * this setting only determines which language to prioritize when a word
+         * exists in both languages or when building character by character patterns.
+         * 
+         * @param {string} language - The language to prioritize ('UEB' for English or 'Philippine' for Filipino)
+         * @returns {boolean} - Whether the language was successfully set
+         */
+        setPrimaryLanguage(language) {
+            if (languages.includes(language)) {
+                currentLanguage = language;
+                console.log(`Primary language set to ${language}`);
+                return true;
+            }
+            return false;
+        },
 
-    /**
-     * Legacy method maintained for backward compatibility
-     * @deprecated Use setPrimaryLanguage instead
-     */
-    setLanguage(language) {
-        return this.setPrimaryLanguage(language);
-    }
+        /**
+         * Legacy method maintained for backward compatibility
+         * @deprecated Use setPrimaryLanguage instead
+         */
+        setLanguage(language) {
+            return this.setPrimaryLanguage(language);
+        },
 
-    /**
-     * Get available languages
-     * @returns {string[]} List of available languages
-     */
-    getLanguages() {
-        return this.languages;
-    }
+        /**
+         * Get available languages
+         * @returns {string[]} List of available languages
+         */
+        getLanguages() {
+            return languages;
+        },
 
-    /**
-     * Process recognized speech to find matching braille patterns
-     * @param {string} text - The recognized speech text
-     * @returns {Array} - Array of words with their matching braille patterns
-     */
-    processRecognizedSpeech(text) {
-        if (!text || typeof text !== 'string') return [];
-        
-        // Split the text into words
-        const words = text.trim().toLowerCase().split(/\s+/);
-        const results = [];
-        
-        console.log(`Processing ${words.length} words from speech: "${text}"`);
-        
-        // If no words found, return a placeholder result to ensure output phase still shows
-        if (words.length === 0 || (words.length === 1 && words[0] === '')) {
-            return [{
-                word: "no speech detected",
-                found: false,
-                isEmpty: true,
-                // Add a default array so hardware display still shows something
-                array: [[1,2,3]] // Default pattern - can be changed to whatever makes sense
-            }];
-        }
-        
-        for (const word of words) {
-            // Skip empty words
-            if (!word) continue;
+        /**
+         * Process recognized speech to find matching braille patterns
+         * @param {string} text - The recognized speech text
+         * @returns {Array} - Array of words with their matching braille patterns
+         */
+        processRecognizedSpeech(text) {
+            if (!text || typeof text !== 'string') return [];
             
-            // Clean the word of punctuation
-            const cleanWord = word.replace(/[^\w]/g, '');
-            if (cleanWord.length === 0) continue;
+            // Split the text into words
+            const words = text.trim().toLowerCase().split(/\s+/);
+            const results = [];
             
-            // Find the braille pattern
-            const match = this.translateWord(cleanWord);
+            console.log(`Processing ${words.length} words from speech: "${text}"`);
             
-            // Add to results
-            if (match) {
-                results.push({
-                    word: cleanWord,
-                    array: match.array,
-                    found: true,
-                    lang: match.lang
-                });
-                console.log(`Found pattern for "${cleanWord}"`);
-            } else {
-                // Even when no match found, provide a basic pattern
-                // This ensures the hardware always shows something
-                results.push({
-                    word: cleanWord, 
+            // If no words found, return a placeholder result to ensure output phase still shows
+            if (words.length === 0 || (words.length === 1 && words[0] === '')) {
+                return [{
+                    word: "no speech detected",
                     found: false,
-                    // Use first letter if possible or a default pattern
-                    array: this.getFallbackPattern(cleanWord)
-                });
-                console.log(`No pattern found for "${cleanWord}", using fallback pattern`);
+                    isEmpty: true,
+                    // Add a default array so hardware display still shows something
+                    array: [[1,2,3]] // Default pattern - can be changed to whatever makes sense
+                }];
             }
-        }
-        
-        return results;
-    }
-
-    /**
-     * Get a fallback pattern when no exact match is found
-     * @param {string} word - Word to generate fallback pattern for
-     * @returns {Array} - A dot pattern array that can be displayed
-     */
-    getFallbackPattern(word) {
-        // Try to get pattern for first letter
-        if (word && word.length > 0) {
-            const firstChar = word[0];
-            const charMatch = this.findWordInDatabase(firstChar);
-            if (charMatch && charMatch.array) {
-                console.log(`Using first letter "${firstChar}" pattern as fallback`);
-                return charMatch.array;
+            
+            for (const word of words) {
+                // Skip empty words
+                if (!word) continue;
+                
+                // Clean the word of punctuation
+                const cleanWord = word.replace(/[^\w]/g, '');
+                if (cleanWord.length === 0) continue;
+                
+                // Find the braille pattern
+                const match = this.translateWord(cleanWord);
+                
+                // Add to results
+                if (match) {
+                    results.push({
+                        word: cleanWord,
+                        array: match.array,
+                        found: true,
+                        lang: match.lang
+                    });
+                    console.log(`Found pattern for "${cleanWord}"`);
+                } else {
+                    // Even when no match found, provide a basic pattern
+                    // This ensures the hardware always shows something
+                    results.push({
+                        word: cleanWord, 
+                        found: false,
+                        // Use first letter if possible or a default pattern
+                        array: this.getFallbackPattern(cleanWord)
+                    });
+                    console.log(`No pattern found for "${cleanWord}", using fallback pattern`);
+                }
             }
-        }
-        
-        // Emergency fallback if nothing else works
-        // This pattern creates a single dot in position 3 (bottom left)
-        // which is distinctive and indicates "not found" visually
-        return [[3]];
-    }
+            
+            return results;
+        },
 
-    /**
-     * Get the best match from processed speech results
-     * This helps the output phase always have something to display
-     * @param {Array} speechResults - Results from processRecognizedSpeech
-     * @returns {Object} - Best match or placeholder if no matches
-     */
-    getBestMatchForDisplay(speechResults) {
-        if (!speechResults || speechResults.length === 0) {
-            return { 
-                word: "no speech detected",
-                found: false,
-                isEmpty: true,
-                array: [[3,6]] // Distinctive pattern for "no speech"
-            };
-        }
-        
-        // First try to find any matched word
-        const foundMatch = speechResults.find(result => result.found);
-        if (foundMatch) {
-            return foundMatch;
-        }
-        
-        // If no matches, return the first result
-        // We now ensure it has an array property from processRecognizedSpeech
-        return speechResults[0];
-    }
+        /**
+         * Get a fallback pattern when no exact match is found
+         * @param {string} word - Word to generate fallback pattern for
+         * @returns {Array} - A dot pattern array that can be displayed
+         */
+        getFallbackPattern(word) {
+            // Try to get pattern for first letter
+            if (word && word.length > 0) {
+                const firstChar = word[0];
+                const charMatch = this.findWordInDatabase(firstChar);
+                if (charMatch && charMatch.array) {
+                    console.log(`Using first letter "${firstChar}" pattern as fallback`);
+                    return charMatch.array;
+                }
+            }
+            
+            // Emergency fallback if nothing else works
+            // This pattern creates a single dot in position 3 (bottom left)
+            // which is distinctive and indicates "not found" visually
+            return [[3]];
+        },
 
-    /**
-     * Translates a word to its braille pattern with improved matching algorithm
-     * @param {string} word - The word to translate
-     * @returns {Object|null} - The braille pattern info or null if not found
-     */
-    translateWord(word) {
-        if (!word) return null;
-        
-        // Clean and normalize the input word
-        word = word.toLowerCase().trim();
-        
-        // First try to find the exact word in the database
-        const match = this.findWordInDatabase(word);
-        if (match) {
-            console.log(`Found exact match for "${word}": ${JSON.stringify(match.array)}`);
-            return match;
-        }
-        
-        // Try alternate forms (common plurals, tenses) - add more as needed
-        const alternates = this.generateAlternateForms(word);
-        for (const altWord of alternates) {
-            const altMatch = this.findWordInDatabase(altWord);
-            if (altMatch) {
-                console.log(`Found match for alternate form "${altWord}" from "${word}"`);
-                return {
-                    ...altMatch,
-                    isAlternateForm: true,
-                    originalWord: word
+        /**
+         * Get the best match from processed speech results
+         * This helps the output phase always have something to display
+         * @param {Array} speechResults - Results from processRecognizedSpeech
+         * @returns {Object} - Best match or placeholder if no matches
+         */
+        getBestMatchForDisplay(speechResults) {
+            if (!speechResults || speechResults.length === 0) {
+                return { 
+                    word: "no speech detected",
+                    found: false,
+                    isEmpty: true,
+                    array: [[3,6]] // Distinctive pattern for "no speech"
                 };
             }
-        }
-        
-        // If no match found and word has multiple characters, try character by character
-        if (word.length > 1) {
-            const letterArrays = [];
-            let allFound = true;
             
-            for (const char of word) {
-                // Try to find each character in the database
-                const charMatch = this.findWordInDatabase(char);
-                if (charMatch) {
-                    // For multi-cell characters, we need to flatten or extract the specific cell
-                    if (Array.isArray(charMatch.array[0])) {
-                        letterArrays.push(charMatch.array[0]); // Get first cell of pattern
+            // First try to find any matched word
+            const foundMatch = speechResults.find(result => result.found);
+            if (foundMatch) {
+                return foundMatch;
+            }
+            
+            // If no matches, return the first result
+            // We now ensure it has an array property from processRecognizedSpeech
+            return speechResults[0];
+        },
+
+        /**
+         * Translates a word to its braille pattern with improved matching algorithm
+         * @param {string} word - The word to translate
+         * @returns {Object|null} - The braille pattern info or null if not found
+         */
+        translateWord(word) {
+            if (!word) return null;
+            
+            // Clean and normalize the input word
+            word = word.toLowerCase().trim();
+            
+            // First try to find the exact word in the database
+            const match = this.findWordInDatabase(word);
+            if (match) {
+                console.log(`Found exact match for "${word}": ${JSON.stringify(match.array)}`);
+                return match;
+            }
+            
+            // Try alternate forms (common plurals, tenses) - add more as needed
+            const alternates = this.generateAlternateForms(word);
+            for (const altWord of alternates) {
+                const altMatch = this.findWordInDatabase(altWord);
+                if (altMatch) {
+                    console.log(`Found match for alternate form "${altWord}" from "${word}"`);
+                    return {
+                        ...altMatch,
+                        isAlternateForm: true,
+                        originalWord: word
+                    };
+                }
+            }
+            
+            // If no match found and word has multiple characters, try character by character
+            if (word.length > 1) {
+                const letterArrays = [];
+                let allFound = true;
+                
+                for (const char of word) {
+                    // Try to find each character in the database
+                    const charMatch = this.findWordInDatabase(char);
+                    if (charMatch) {
+                        // For multi-cell characters, we need to flatten or extract the specific cell
+                        if (Array.isArray(charMatch.array[0])) {
+                            letterArrays.push(charMatch.array[0]); // Get first cell of pattern
+                        } else {
+                            letterArrays.push(charMatch.array);
+                        }
                     } else {
-                        letterArrays.push(charMatch.array);
+                        allFound = false;
+                        break;
+                    }
+                }
+                
+                // Only return if we found patterns for all characters
+                if (allFound && letterArrays.length === word.length) {
+                    console.log(`Built pattern for "${word}" character-by-character`);
+                    return {
+                        word: word,
+                        array: letterArrays,
+                        braille: '', // No Unicode representation for character-by-character
+                        shortf: '',
+                        lang: currentLanguage,
+                        isComposite: true
+                    };
+                }
+            }
+            
+            console.log(`No pattern found for "${word}"`);
+            return null;
+        },
+
+        /**
+         * Generate common alternate forms of words to improve matching
+         * @param {string} word - Original word
+         * @returns {Array} - Array of alternate forms to try
+         */
+        generateAlternateForms(word) {
+            const alternates = [];
+            
+            // Simple plural handling (English)
+            if (word.endsWith('s')) {
+                alternates.push(word.slice(0, -1)); // Remove trailing 's'
+            } else {
+                alternates.push(word + 's'); // Add 's'
+            }
+            
+            // Common endings
+            if (word.endsWith('ing')) {
+                // base form
+                alternates.push(word.slice(0, -3));
+                // with 'e' (like 'make' from 'making')
+                alternates.push(word.slice(0, -3) + 'e');
+            }
+            
+            if (word.endsWith('ed')) {
+                // base form
+                alternates.push(word.slice(0, -2));
+                // with 'e' (like 'bake' from 'baked')
+                alternates.push(word.slice(0, -1));
+            }
+            
+            // Try variations with/without hyphen or spaces for compound words
+            if (word.includes('-')) {
+                alternates.push(word.replace(/-/g, ''));
+                alternates.push(word.replace(/-/g, ' '));
+            }
+            
+            return alternates;
+        },
+
+        /**
+         * Creates HTML for a visual braille cell representation
+         * @param {Array} dotPattern - Array of dot numbers that are active
+         * @returns {Element} - DOM element for the braille cell
+         */
+        createBrailleCellHTML(dotPattern) {
+            const cell = document.createElement('div');
+            cell.className = 'braille-cell';
+            
+            // Create 6 dots (2 columns x 3 rows)
+            for (let i = 1; i <= 6; i++) {
+                const dot = document.createElement('div');
+                dot.className = 'braille-dot';
+                dot.dataset.dot = i;
+                
+                // Check if this dot should be active
+                if (dotPattern && dotPattern.includes(i)) {
+                    dot.classList.add('active');
+                }
+                
+                cell.appendChild(dot);
+            }
+            
+            return cell;
+        },
+
+        /**
+         * Render multiple braille cells
+         * @param {Array} pattern - Pattern array (can be nested for multiple cells)
+         * @param {Element} container - DOM element to render cells into
+         */
+        renderBrailleCells(pattern, container) {
+            if (!pattern || !container) return;
+            
+            // Clear previous content
+            container.innerHTML = '';
+            
+            // Create cells container
+            const cellsContainer = document.createElement('div');
+            cellsContainer.className = 'braille-cells-container';
+            
+            if (Array.isArray(pattern)) {
+                if (pattern.length === 0) return;
+                
+                // Check if it's a multi-cell pattern
+                if (Array.isArray(pattern[0])) {
+                    // Handle multi-cell pattern
+                    for (const cellPattern of pattern) {
+                        const cellElement = this.createBrailleCellHTML(cellPattern);
+                        cellsContainer.appendChild(cellElement);
                     }
                 } else {
-                    allFound = false;
-                    break;
-                }
-            }
-            
-            // Only return if we found patterns for all characters
-            if (allFound && letterArrays.length === word.length) {
-                console.log(`Built pattern for "${word}" character-by-character`);
-                return {
-                    word: word,
-                    array: letterArrays,
-                    braille: '', // No Unicode representation for character-by-character
-                    shortf: '',
-                    lang: this.currentLanguage,
-                    isComposite: true
-                };
-            }
-        }
-        
-        console.log(`No pattern found for "${word}"`);
-        return null;
-    }
-
-    /**
-     * Generate common alternate forms of words to improve matching
-     * @param {string} word - Original word
-     * @returns {Array} - Array of alternate forms to try
-     */
-    generateAlternateForms(word) {
-        const alternates = [];
-        
-        // Simple plural handling (English)
-        if (word.endsWith('s')) {
-            alternates.push(word.slice(0, -1)); // Remove trailing 's'
-        } else {
-            alternates.push(word + 's'); // Add 's'
-        }
-        
-        // Common endings
-        if (word.endsWith('ing')) {
-            // base form
-            alternates.push(word.slice(0, -3));
-            // with 'e' (like 'make' from 'making')
-            alternates.push(word.slice(0, -3) + 'e');
-        }
-        
-        if (word.endsWith('ed')) {
-            // base form
-            alternates.push(word.slice(0, -2));
-            // with 'e' (like 'bake' from 'baked')
-            alternates.push(word.slice(0, -1));
-        }
-        
-        // Try variations with/without hyphen or spaces for compound words
-        if (word.includes('-')) {
-            alternates.push(word.replace(/-/g, ''));
-            alternates.push(word.replace(/-/g, ' '));
-        }
-        
-        return alternates;
-    }
-
-    /**
-     * Creates HTML for a visual braille cell representation
-     * @param {Array} dotPattern - Array of dot numbers that are active
-     * @returns {Element} - DOM element for the braille cell
-     */
-    createBrailleCellHTML(dotPattern) {
-        const cell = document.createElement('div');
-        cell.className = 'braille-cell';
-        
-        // Create 6 dots (2 columns x 3 rows)
-        for (let i = 1; i <= 6; i++) {
-            const dot = document.createElement('div');
-            dot.className = 'braille-dot';
-            dot.dataset.dot = i;
-            
-            // Check if this dot should be active
-            if (dotPattern && dotPattern.includes(i)) {
-                dot.classList.add('active');
-            }
-            
-            cell.appendChild(dot);
-        }
-        
-        return cell;
-    }
-
-    /**
-     * Render multiple braille cells
-     * @param {Array} pattern - Pattern array (can be nested for multiple cells)
-     * @param {Element} container - DOM element to render cells into
-     */
-    renderBrailleCells(pattern, container) {
-        if (!pattern || !container) return;
-        
-        // Clear previous content
-        container.innerHTML = '';
-        
-        // Create cells container
-        const cellsContainer = document.createElement('div');
-        cellsContainer.className = 'braille-cells-container';
-        
-        if (Array.isArray(pattern)) {
-            if (pattern.length === 0) return;
-            
-            // Check if it's a multi-cell pattern
-            if (Array.isArray(pattern[0])) {
-                // Handle multi-cell pattern
-                for (const cellPattern of pattern) {
-                    const cellElement = this.createBrailleCellHTML(cellPattern);
+                    // Single cell pattern
+                    const cellElement = this.createBrailleCellHTML(pattern);
                     cellsContainer.appendChild(cellElement);
                 }
-            } else {
-                // Single cell pattern
-                const cellElement = this.createBrailleCellHTML(pattern);
-                cellsContainer.appendChild(cellElement);
             }
-        }
-        
-        container.appendChild(cellsContainer);
-    }
-
-    /**
-     * Run a comprehensive alphabet and numbers test
-     * @param {Element} container - Container to display braille patterns
-     * @param {Function} sendCallback - Function to send patterns to hardware
-     * @returns {Promise<void>}
-     */
-    async runAlphabetAndNumbersTest(container, sendCallback) {
-        const statusElement = document.createElement('div');
-        statusElement.className = 'test-status';
-        statusElement.textContent = 'Running braille test...';
-        container.appendChild(statusElement);
-        
-        try {
-            // Generate test sequence - all letters and numbers
-            const letters = 'abcdefghijklmnopqrstuvwxyz'.split('');
-            const numbers = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
-            const testItems = [...letters, ...numbers];
             
-            // Run the test sequence
-            for (let i = 0; i < testItems.length; i++) {
-                const item = testItems[i];
-                statusElement.textContent = `Testing: ${item} (${i+1}/${testItems.length})`;
+            container.appendChild(cellsContainer);
+        },
+
+        /**
+         * Run a comprehensive alphabet and numbers test
+         * @param {Element} container - Container to display braille patterns
+         * @param {Function} sendCallback - Function to send patterns to hardware
+         * @returns {Promise<void>}
+         */
+        async runAlphabetAndNumbersTest(container, sendCallback) {
+            const statusElement = document.createElement('div');
+            statusElement.className = 'test-status';
+            statusElement.textContent = 'Running braille test...';
+            container.appendChild(statusElement);
+            
+            try {
+                // Generate test sequence - all letters and numbers
+                const letters = 'abcdefghijklmnopqrstuvwxyz'.split('');
+                const numbers = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+                const testItems = [...letters, ...numbers];
                 
-                // Get braille pattern
-                const match = this.translateWord(item);
+                // Run the test sequence
+                for (let i = 0; i < testItems.length; i++) {
+                    const item = testItems[i];
+                    statusElement.textContent = `Testing: ${item} (${i+1}/${testItems.length})`;
+                    
+                    // Get braille pattern
+                    const match = this.translateWord(item);
+                    
+                    if (match) {
+                        // Display pattern
+                        this.renderBrailleCells(match.array, container);
+                        
+                        // Send to hardware if callback provided
+                        if (sendCallback && typeof sendCallback === 'function') {
+                            await sendCallback(match.array);
+                        }
+                        
+                        // Wait 0.5 seconds
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    } else {
+                        console.warn(`No pattern found for: ${item}`);
+                    }
+                }
                 
+                // Test complete
+                statusElement.textContent = 'Test complete!';
+                statusElement.className = 'test-status success';
+                setTimeout(() => {
+                    statusElement.remove();
+                    container.innerHTML = '';
+                }, 2000);
+            } catch (error) {
+                console.error('Error during braille test:', error);
+                statusElement.textContent = `Test error: ${error.message}`;
+                statusElement.className = 'test-status error';
+            }
+        },
+
+        /**
+         * Run a test sequence showing all braille patterns
+         * @param {Element} container - DOM element to render cells into
+         * @param {Function} sendCallback - Callback to send patterns to hardware
+         */
+        async runBrailleTest(container, sendCallback) {
+            const alphabet = 'abcdefghijklmnopqrstuvwxyz';
+            const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+            
+            // Test alphabet characters
+            for (const char of alphabet) {
+                const match = this.translateWord(char);
                 if (match) {
-                    // Display pattern
+                    console.log(`Testing '${char}': ${JSON.stringify(match.array)}`);
                     this.renderBrailleCells(match.array, container);
                     
                     // Send to hardware if callback provided
-                    if (sendCallback && typeof sendCallback === 'function') {
+                    if (sendCallback) {
                         await sendCallback(match.array);
                     }
                     
-                    // Wait 0.5 seconds
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                } else {
-                    console.warn(`No pattern found for: ${item}`);
+                    await delay(800);
                 }
             }
             
-            // Test complete
-            statusElement.textContent = 'Test complete!';
-            statusElement.className = 'test-status success';
-            setTimeout(() => {
-                statusElement.remove();
-                container.innerHTML = '';
-            }, 2000);
-        } catch (error) {
-            console.error('Error during braille test:', error);
-            statusElement.textContent = `Test error: ${error.message}`;
-            statusElement.className = 'test-status error';
-        }
-    }
-
-    /**
-     * Run a test sequence showing all braille patterns
-     * @param {Element} container - DOM element to render cells into
-     * @param {Function} sendCallback - Callback to send patterns to hardware
-     */
-    async runBrailleTest(container, sendCallback) {
-        const alphabet = 'abcdefghijklmnopqrstuvwxyz';
-        const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-        
-        // Test alphabet characters
-        for (const char of alphabet) {
-            const match = this.translateWord(char);
-            if (match) {
-                console.log(`Testing '${char}': ${JSON.stringify(match.array)}`);
-                this.renderBrailleCells(match.array, container);
-                
-                // Send to hardware if callback provided
-                if (sendCallback) {
-                    await sendCallback(match.array);
-                }
-                
-                await delay(800);
-            }
-        }
-        
-        // Clear at the end
-        container.innerHTML = '';
-    }
-
-    /**
-     * Clear cached database
-     */
-    clearCache() {
-        try {
-            localStorage.removeItem(this.cacheKey);
-            console.log('Braille database cache cleared');
-            return true;
-        } catch (error) {
-            console.error('Error clearing cache:', error);
-            return false;
-        }
-    }
-    
-    /**
-     * Debug function to dump the entire database content
-     * @param {Element} [container] - Optional HTML container to display the output
-     * @returns {Object} - The database for further inspection
-     */
-    debugDumpDatabase(container = null) {
-        const languages = Object.keys(this.brailleDatabase);
-        let totalEntries = 0;
-        
-        // Count total entries
-        for (const lang of languages) {
-            totalEntries += Object.keys(this.brailleDatabase[lang]).length;
-        }
-        
-        // Log summary to console
-        console.group('Braille Database Debug Dump');
-        console.log(`Total languages: ${languages.length}`);
-        console.log(`Total entries: ${totalEntries}`);
-        
-        // Log detailed content
-        for (const lang of languages) {
-            const entries = Object.keys(this.brailleDatabase[lang]).length;
-            console.group(`Language: ${lang} (${entries} entries)`);
-            
-            // Log a sample of entries (first 10)
-            const words = Object.keys(this.brailleDatabase[lang]).slice(0, 10);
-            for (const word of words) {
-                const entry = this.brailleDatabase[lang][word];
-                console.log(`${word}: ${JSON.stringify(entry)}`);
-            }
-            
-            if (entries > 10) {
-                console.log(`... and ${entries - 10} more entries`);
-            }
-            
-            console.groupEnd();
-        }
-        
-        console.groupEnd();
-        
-        // If container provided, display the output in HTML
-        if (container instanceof Element) {
-            const output = document.createElement('div');
-            output.className = 'database-debug';
-            
-            // Add summary
-            const summary = document.createElement('div');
-            summary.innerHTML = `
-                <h3>Database Summary</h3>
-                <p><strong>Languages:</strong> ${languages.length}</p>
-                <p><strong>Total Entries:</strong> ${totalEntries}</p>
-            `;
-            output.appendChild(summary);
-            
-            // Add detailed content for each language
-            for (const lang of languages) {
-                const entries = Object.keys(this.brailleDatabase[lang]).length;
-                const langSection = document.createElement('div');
-                langSection.className = 'db-language-section';
-                
-                const langHeader = document.createElement('h4');
-                langHeader.textContent = `${lang} (${entries} entries)`;
-                langSection.appendChild(langHeader);
-                
-                // Create a table for entries
-                const table = document.createElement('table');
-                table.className = 'db-entries-table';
-                table.innerHTML = `
-                    <thead>
-                        <tr>
-                            <th>Word</th>
-                            <th>Shortform</th>
-                            <th>Braille</th>
-                            <th>Dot Array</th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                `;
-                
-                // Add entries (first 20)
-                const tbody = table.querySelector('tbody');
-                const words = Object.keys(this.brailleDatabase[lang]).slice(0, 20);
-                
-                for (const word of words) {
-                    const entry = this.brailleDatabase[lang][word];
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${word}</td>
-                        <td>${entry.shortf || '-'}</td>
-                        <td>${entry.braille || '-'}</td>
-                        <td>${JSON.stringify(entry.array)}</td>
-                    `;
-                    tbody.appendChild(row);
-                }
-                
-                langSection.appendChild(table);
-                
-                if (entries > 20) {
-                    const moreInfo = document.createElement('p');
-                    moreInfo.textContent = `... and ${entries - 20} more entries`;
-                    langSection.appendChild(moreInfo);
-                }
-                
-                output.appendChild(langSection);
-            }
-            
-            // Clear container and add the output
+            // Clear at the end
             container.innerHTML = '';
-            container.appendChild(output);
-            
-            // Add some basic styling for the debug output
-            const style = document.createElement('style');
-            style.textContent = `
-                .database-debug { font-family: monospace; margin: 10px 0; }
-                .db-language-section { margin: 15px 0; border-top: 1px solid #ccc; padding-top: 10px; }
-                .db-entries-table { width: 100%; border-collapse: collapse; margin: 10px 0; }
-                .db-entries-table th, .db-entries-table td { 
-                    border: 1px solid #ddd; padding: 4px 8px; text-align: left; 
-                }
-                .db-entries-table th { background-color: #f2f2f2; }
-            `;
-            container.appendChild(style);
-        }
-        
-        // Return the database for further inspection
-        return this.brailleDatabase;
-    }
+        },
 
-    /**
-     * Debug function to simulate output phase with a specific word
-     * @param {string} word - Word to translate and display
-     * @param {boolean} activateOutputPhase - Whether to trigger output phase in the app
-     * @param {Element} [container] - Optional container to display the braille pattern
-     * @returns {Object|null} - The translation result or null if not found
-     */
-    debugSimulateOutput(word, activateOutputPhase = true, container = null) {
-        console.group(`Debug: Simulating output for "${word}"`);
+        /**
+         * Clear cached database
+         */
+        clearCache() {
+            try {
+                localStorage.removeItem(cacheKey);
+                console.log('Braille database cache cleared');
+                return true;
+            } catch (error) {
+                console.error('Error clearing cache:', error);
+                return false;
+            }
+        },
         
-        // Find braille pattern for this word
-        const match = this.translateWord(word);
-        
-        if (match) {
-            console.log(`Found braille pattern for "${word}":`, match);
+        /**
+         * Debug function to dump the entire database content
+         * @param {Element} [container] - Optional HTML container to display the output
+         * @returns {Object} - The database for further inspection
+         */
+        debugDumpDatabase(container = null) {
+            const dbLanguages = Object.keys(brailleDatabase);
+            let totalEntries = 0;
             
-            // Display in container if provided
+            // Count total entries
+            for (const lang of dbLanguages) {
+                totalEntries += Object.keys(brailleDatabase[lang]).length;
+            }
+            
+            // Log summary to console
+            console.group('Braille Database Debug Dump');
+            console.log(`Total languages: ${dbLanguages.length}`);
+            console.log(`Total entries: ${totalEntries}`);
+            
+            // Log detailed content
+            for (const lang of dbLanguages) {
+                const entries = Object.keys(brailleDatabase[lang]).length;
+                console.group(`Language: ${lang} (${entries} entries)`);
+                
+                // Log a sample of entries (first 10)
+                const words = Object.keys(brailleDatabase[lang]).slice(0, 10);
+                for (const word of words) {
+                    const entry = brailleDatabase[lang][word];
+                    console.log(`${word}: ${JSON.stringify(entry)}`);
+                }
+                
+                if (entries > 10) {
+                    console.log(`... and ${entries - 10} more entries`);
+                }
+                
+                console.groupEnd();
+            }
+            
+            console.groupEnd();
+            
+            // If container provided, display the output in HTML
             if (container instanceof Element) {
-                this.renderBrailleCells(match.array, container);
+                const output = document.createElement('div');
+                output.className = 'database-debug';
+                
+                // Add summary
+                const summary = document.createElement('div');
+                summary.innerHTML = `
+                    <h3>Database Summary</h3>
+                    <p><strong>Languages:</strong> ${dbLanguages.length}</p>
+                    <p><strong>Total Entries:</strong> ${totalEntries}</p>
+                `;
+                output.appendChild(summary);
+                
+                // Add detailed content for each language
+                for (const lang of dbLanguages) {
+                    const entries = Object.keys(brailleDatabase[lang]).length;
+                    const langSection = document.createElement('div');
+                    langSection.className = 'db-language-section';
+                    
+                    const langHeader = document.createElement('h4');
+                    langHeader.textContent = `${lang} (${entries} entries)`;
+                    langSection.appendChild(langHeader);
+                    
+                    // Create a table for entries
+                    const table = document.createElement('table');
+                    table.className = 'db-entries-table';
+                    table.innerHTML = `
+                        <thead>
+                            <tr>
+                                <th>Word</th>
+                                <th>Shortform</th>
+                                <th>Braille</th>
+                                <th>Dot Array</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    `;
+                    
+                    // Add entries (first 20)
+                    const tbody = table.querySelector('tbody');
+                    const words = Object.keys(brailleDatabase[lang]).slice(0, 20);
+                    
+                    for (const word of words) {
+                        const entry = brailleDatabase[lang][word];
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${word}</td>
+                            <td>${entry.shortf || '-'}</td>
+                            <td>${entry.braille || '-'}</td>
+                            <td>${JSON.stringify(entry.array)}</td>
+                        `;
+                        tbody.appendChild(row);
+                    }
+                    
+                    langSection.appendChild(table);
+                    
+                    if (entries > 20) {
+                        const moreInfo = document.createElement('p');
+                        moreInfo.textContent = `... and ${entries - 20} more entries`;
+                        langSection.appendChild(moreInfo);
+                    }
+                    
+                    output.appendChild(langSection);
+                }
+                
+                // Clear container and add the output
+                container.innerHTML = '';
+                container.appendChild(output);
+                
+                // Add some basic styling for the debug output
+                const style = document.createElement('style');
+                style.textContent = `
+                    .database-debug { font-family: monospace; margin: 10px 0; }
+                    .db-language-section { margin: 15px 0; border-top: 1px solid #ccc; padding-top: 10px; }
+                    .db-entries-table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+                    .db-entries-table th, .db-entries-table td { 
+                        border: 1px solid #ddd; padding: 4px 8px; text-align: left; 
+                    }
+                    .db-entries-table th { background-color: #f2f2f2; }
+                `;
+                container.appendChild(style);
             }
             
-            // Create a result object similar to what processRecognizedSpeech would return
-            const result = [{
-                word: word,
-                array: match.array,
-                found: true,
-                lang: match.lang,
-                isDebug: true
-            }];
+            // Return the database for further inspection
+            return brailleDatabase;
+        },
+
+        /**
+         * Debug function to simulate output phase with a specific word
+         * @param {string} word - Word to translate and display
+         * @param {boolean} activateOutputPhase - Whether to trigger output phase in the app
+         * @param {Element} [container] - Optional container to display the braille pattern
+         * @returns {Object|null} - The translation result or null if not found
+         */
+        debugSimulateOutput(word, activateOutputPhase = true, container = null) {
+            console.group(`Debug: Simulating output for "${word}"`);
             
-            // Activate output phase if requested
-            if (activateOutputPhase && window.startOutputPhase) {
-                console.log('Activating output phase with this result');
-                // Store original transcript and replace with our debug word
-                const originalTranscript = window.currentTranscript || '';
-                window.currentTranscript = word;
+            // Find braille pattern for this word
+            const match = this.translateWord(word);
+            
+            if (match) {
+                console.log(`Found braille pattern for "${word}":`, match);
                 
-                // Override the normal processRecognizedSpeech result for this session
-                const originalProcessFunction = this.processRecognizedSpeech;
-                this.processRecognizedSpeech = function() {
-                    console.log('Using debug result for speech processing');
-                    // Restore original function after use
+                // Display in container if provided
+                if (container instanceof Element) {
+                    this.renderBrailleCells(match.array, container);
+                }
+                
+                // Create a result object similar to what processRecognizedSpeech would return
+                const result = [{
+                    word: word,
+                    array: match.array,
+                    found: true,
+                    lang: match.lang,
+                    isDebug: true
+                }];
+                
+                // Activate output phase if requested
+                if (activateOutputPhase && window.startOutputPhase) {
+                    console.log('Activating output phase with this result');
+                    // Store original transcript and replace with our debug word
+                    const originalTranscript = window.currentTranscript || '';
+                    window.currentTranscript = word;
+                    
+                    // Override the normal processRecognizedSpeech result for this session
+                    const originalProcessFunction = this.processRecognizedSpeech;
+                    this.processRecognizedSpeech = function() {
+                        console.log('Using debug result for speech processing');
+                        // Restore original function after use
+                        setTimeout(() => {
+                            this.processRecognizedSpeech = originalProcessFunction;
+                        }, 100);
+                        return result;
+                    }.bind(this);
+                    
+                    // Start output phase
+                    window.startOutputPhase();
+                    
+                    // Restore original transcript after a delay
                     setTimeout(() => {
-                        this.processRecognizedSpeech = originalProcessFunction;
+                        window.currentTranscript = originalTranscript;
                     }, 100);
-                    return result;
-                }.bind(this);
+                }
                 
-                // Start output phase
-                window.startOutputPhase();
-                
-                // Restore original transcript after a delay
-                setTimeout(() => {
-                    window.currentTranscript = originalTranscript;
-                }, 100);
+                console.groupEnd();
+                return result;
+            } else {
+                console.log(`No braille pattern found for "${word}"`);
+                console.groupEnd();
+                return null;
+            }
+        },
+
+        /**
+         * Find a word in the braille database
+         * @param {string} word - Word to find
+         * @returns {Object|null} - Matching entry or null if not found
+         */
+        findWordInDatabase(word) {
+            if (!word || typeof word !== 'string') return null;
+            
+            const normalizedWord = word.toLowerCase().trim();
+            
+            // Check each language, starting with the current one
+            const dbLanguages = [currentLanguage, ...languages.filter(lang => lang !== currentLanguage)];
+            
+            for (const lang of dbLanguages) {
+                if (brailleDatabase[lang] && brailleDatabase[lang][normalizedWord]) {
+                    // Return the entry with language information
+                    const entry = brailleDatabase[lang][normalizedWord];
+                    return {
+                        word: normalizedWord,
+                        shortf: entry.shortf,
+                        braille: entry.braille,
+                        array: entry.array,
+                        lang: lang
+                    };
+                }
             }
             
-            console.groupEnd();
-            return result;
-        } else {
-            console.log(`No braille pattern found for "${word}"`);
-            console.groupEnd();
             return null;
         }
-    }
-
-    /**
-     * Find a word in the braille database
-     * @param {string} word - Word to find
-     * @returns {Object|null} - Matching entry or null if not found
-     */
-    findWordInDatabase(word) {
-        if (!word || typeof word !== 'string') return null;
-        
-        const normalizedWord = word.toLowerCase().trim();
-        
-        // Check each language, starting with the current one
-        const languages = [this.currentLanguage, ...this.languages.filter(lang => lang !== this.currentLanguage)];
-        
-        for (const lang of languages) {
-            if (this.brailleDatabase[lang] && this.brailleDatabase[lang][normalizedWord]) {
-                // Return the entry with language information
-                const entry = this.brailleDatabase[lang][normalizedWord];
-                return {
-                    word: normalizedWord,
-                    shortf: entry.shortf,
-                    braille: entry.braille,
-                    array: entry.array,
-                    lang: lang
-                };
-            }
-        }
-        
-        return null;
-    }
+    };
 }
 
 // Create global instance
-const brailleTranslation = new BrailleTranslation();
+const brailleTranslation = createBrailleTranslation();
