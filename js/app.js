@@ -1311,6 +1311,56 @@ class SpeechToBrailleApp {
                 this.log(`Invalid language: ${language}. Available options: ${languages.join(', ')}`, 'error');
             }
         }
+        else if (command.toLowerCase().startsWith('database:')) {
+            // Database related commands
+            const dbParam = command.substring(9).trim().toLowerCase();
+            
+            if (dbParam === 'dump') {
+                // Dump the entire database for inspection
+                this.log('Dumping entire braille database...', 'info');
+                
+                // Create a container for the database dump
+                const container = document.createElement('div');
+                container.className = 'database-dump';
+                this.elements.debugOutput.appendChild(container);
+                
+                // Use the debugDumpDatabase function to show full database
+                const result = brailleTranslation.debugDumpDatabase(container);
+                
+                // Add summary information
+                const totalLanguages = Object.keys(result).length;
+                let totalEntries = 0;
+                
+                for (const lang in result) {
+                    totalEntries += Object.keys(result[lang]).length;
+                }
+                
+                this.log(`Database dump complete: ${totalLanguages} languages, ${totalEntries} total entries`, 'success');
+            }
+            else if (dbParam === 'stats') {
+                // Show database statistics only
+                this.log('Braille Database Statistics:', 'info');
+                
+                // Get database from the debugDumpDatabase function
+                const database = brailleTranslation.debugDumpDatabase();
+                
+                const languages = Object.keys(database);
+                let totalEntries = 0;
+                
+                for (const lang of languages) {
+                    const entries = Object.keys(database[lang]).length;
+                    totalEntries += entries;
+                    this.log(`- Language ${lang}: ${entries} entries`, 'info');
+                }
+                
+                this.log(`- Total entries: ${totalEntries}`, 'info');
+                this.log(`- Current language: ${brailleTranslation.currentLanguage}`, 'info');
+            }
+            else {
+                this.log(`Unknown database command: ${dbParam}`, 'error');
+                this.log('Available database commands: dump, stats', 'info');
+            }
+        }
         else if (command.toLowerCase() === 'help') {
             // Display help information
             const helpText = `
@@ -1325,6 +1375,8 @@ class SpeechToBrailleApp {
                         <li><code>test:numbers</code> - Test all number representations</li>
                         <li><code>search:word</code> - Search database for a word</li>
                         <li><code>language:X</code> - Set or view language (e.g., language:UEB)</li>
+                        <li><code>database:dump</code> - Show entire braille database</li>
+                        <li><code>database:stats</code> - Show database statistics</li>
                         <li><code>debug:phase</code> - Show current app phase state</li>
                         <li><code>debug:output</code> - Show output phase debug info</li>
                         <li><code>debug:simulate:word</code> - Simulate output phase with word</li>
