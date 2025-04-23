@@ -233,16 +233,29 @@ nine,nine,⠼⠊,"[[3,4,5,6],[2,4]]",UEB`;
     }
 
     /**
-     * Set the current language for braille translation
-     * @param {string} language - The language to set ('UEB' or 'Philippine')
+     * Set the preferred language for braille translation priority
+     * Note: The system always searches both English and Filipino languages,
+     * this setting only determines which language to prioritize when a word
+     * exists in both languages or when building character by character patterns.
+     * 
+     * @param {string} language - The language to prioritize ('UEB' for English or 'Philippine' for Filipino)
+     * @returns {boolean} - Whether the language was successfully set
      */
-    setLanguage(language) {
+    setPrimaryLanguage(language) {
         if (this.languages.includes(language)) {
             this.currentLanguage = language;
-            console.log(`Language set to ${language}`);
+            console.log(`Primary language set to ${language}`);
             return true;
         }
         return false;
+    }
+
+    /**
+     * Legacy method maintained for backward compatibility
+     * @deprecated Use setPrimaryLanguage instead
+     */
+    setLanguage(language) {
+        return this.setPrimaryLanguage(language);
     }
 
     /**
@@ -548,6 +561,134 @@ nine,nine,⠼⠊,"[[3,4,5,6],[2,4]]",UEB`;
             console.error('Error clearing cache:', error);
             return false;
         }
+    }
+    
+    /**
+     * Debug function to dump the entire database content
+     * @param {Element} [container] - Optional HTML container to display the output
+     * @returns {Object} - The database for further inspection
+     */
+    debugDumpDatabase(container = null) {
+        const languages = Object.keys(this.brailleDatabase);
+        let totalEntries = 0;
+        
+        // Count total entries
+        for (const lang of languages) {
+            totalEntries += Object.keys(this.brailleDatabase[lang]).length;
+        }
+        
+        // Log summary to console
+        console.group('Braille Database Debug Dump');
+        console.log(`Total languages: ${languages.length}`);
+        console.log(`Total entries: ${totalEntries}`);
+        
+        // Log detailed content
+        for (const lang of languages) {
+            const entries = Object.keys(this.brailleDatabase[lang]).length;
+            console.group(`Language: ${lang} (${entries} entries)`);
+            
+            // Log a sample of entries (first 10)
+            const words = Object.keys(this.brailleDatabase[lang]).slice(0, 10);
+            for (const word of words) {
+                const entry = this.brailleDatabase[lang][word];
+                console.log(`${word}: ${JSON.stringify(entry)}`);
+            }
+            
+            if (entries > 10) {
+                console.log(`... and ${entries - 10} more entries`);
+            }
+            
+            console.groupEnd();
+        }
+        
+        console.groupEnd();
+        
+        // If container provided, display the output in HTML
+        if (container instanceof Element) {
+            const output = document.createElement('div');
+            output.className = 'database-debug';
+            
+            // Add summary
+            const summary = document.createElement('div');
+            summary.innerHTML = `
+                <h3>Database Summary</h3>
+                <p><strong>Languages:</strong> ${languages.length}</p>
+                <p><strong>Total Entries:</strong> ${totalEntries}</p>
+            `;
+            output.appendChild(summary);
+            
+            // Add detailed content for each language
+            for (const lang of languages) {
+                const entries = Object.keys(this.brailleDatabase[lang]).length;
+                const langSection = document.createElement('div');
+                langSection.className = 'db-language-section';
+                
+                const langHeader = document.createElement('h4');
+                langHeader.textContent = `${lang} (${entries} entries)`;
+                langSection.appendChild(langHeader);
+                
+                // Create a table for entries
+                const table = document.createElement('table');
+                table.className = 'db-entries-table';
+                table.innerHTML = `
+                    <thead>
+                        <tr>
+                            <th>Word</th>
+                            <th>Shortform</th>
+                            <th>Braille</th>
+                            <th>Dot Array</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                `;
+                
+                // Add entries (first 20)
+                const tbody = table.querySelector('tbody');
+                const words = Object.keys(this.brailleDatabase[lang]).slice(0, 20);
+                
+                for (const word of words) {
+                    const entry = this.brailleDatabase[lang][word];
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${word}</td>
+                        <td>${entry.shortf || '-'}</td>
+                        <td>${entry.braille || '-'}</td>
+                        <td>${JSON.stringify(entry.array)}</td>
+                    `;
+                    tbody.appendChild(row);
+                }
+                
+                langSection.appendChild(table);
+                
+                if (entries > 20) {
+                    const moreInfo = document.createElement('p');
+                    moreInfo.textContent = `... and ${entries - 20} more entries`;
+                    langSection.appendChild(moreInfo);
+                }
+                
+                output.appendChild(langSection);
+            }
+            
+            // Clear container and add the output
+            container.innerHTML = '';
+            container.appendChild(output);
+            
+            // Add some basic styling for the debug output
+            const style = document.createElement('style');
+            style.textContent = `
+                .database-debug { font-family: monospace; margin: 10px 0; }
+                .db-language-section { margin: 15px 0; border-top: 1px solid #ccc; padding-top: 10px; }
+                .db-entries-table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+                .db-entries-table th, .db-entries-table td { 
+                    border: 1px solid #ddd; padding: 4px 8px; text-align: left; 
+                }
+                .db-entries-table th { background-color: #f2f2f2; }
+            `;
+            container.appendChild(style);
+        }
+        
+        // Return the database for further inspection
+        return this.brailleDatabase;
     }
 
     /**
