@@ -175,9 +175,6 @@ class SpeechToBrailleApp {
             this.elements.interimResult.textContent = result;
             this.animateAudioWave(true);
             this.updateAudioLevel();
-            
-            // Words are now handled by the dedicated word detection callback
-            // so we don't need to extract words here
         });
         
         // Handle word detection (both interim and final)
@@ -187,9 +184,9 @@ class SpeechToBrailleApp {
             // Only process words with sufficient length and confidence
             if (word.length >= 2) {
                 // Try to find a match in the braille database
-                const pattern = brailleTranslation.translateWord(word);
+                const match = brailleTranslation.translateWord(word);
                 
-                if (pattern) {
+                if (match) {
                     this.log(`Found braille match for ${isFinal ? 'final' : 'interim'} word: ${word} (confidence: ${confidence.toFixed(2)})`);
                     
                     // Display the detected word and its confidence
@@ -199,7 +196,7 @@ class SpeechToBrailleApp {
                     this.flashWordFound(word);
                     
                     // Transition to output phase
-                    this.transitionToOutputPhase(word, pattern);
+                    this.transitionToOutputPhase(word, match);
                 }
             }
         });
@@ -216,16 +213,16 @@ class SpeechToBrailleApp {
                 const lastWord = words[words.length - 1];
                 
                 // Try to find a match in the braille database
-                const pattern = brailleTranslation.translateWord(lastWord);
+                const match = brailleTranslation.translateWord(lastWord);
                 
-                if (pattern) {
+                if (match) {
                     this.log(`Found braille match for final word: ${lastWord} (confidence: ${confidence.toFixed(2)})`);
                     
                     // Visual feedback for match found
                     this.flashWordFound(lastWord);
                     
                     // Transition to output phase
-                    this.transitionToOutputPhase(lastWord, pattern);
+                    this.transitionToOutputPhase(lastWord, match);
                 }
             }
         });
@@ -723,20 +720,21 @@ class SpeechToBrailleApp {
     /**
      * Transition to output phase
      * @param {string} word - The recognized word
-     * @param {Array} pattern - The braille pattern
+     * @param {Object} match - The braille pattern match object
      */
-    transitionToOutputPhase(word, pattern) {
+    transitionToOutputPhase(word, match) {
         // Debug logging for troubleshooting
         this.log(`BEGIN OUTPUT PHASE TRANSITION for word: "${word}"`, 'debug');
         
         // Guard against null patterns
-        if (!pattern) {
+        if (!match || !match.array) {
             this.log("ERROR: Null pattern provided to output phase", 'error');
             console.error("Attempted to transition to output phase with null pattern");
             return;
         }
         
-        this.log(`Pattern details: ${JSON.stringify(pattern)}`, 'debug');
+        this.log(`Pattern details: ${JSON.stringify(match.array)}`, 'debug');
+        this.log(`Match language: ${match.lang}`, 'debug');
         
         // Stop the listening session if it's active
         if (this.isListeningActive) {
@@ -758,7 +756,7 @@ class SpeechToBrailleApp {
         this.log("Speech recognition stopped for output phase", 'debug');
         
         // Play output sound
-        if (pattern) {
+        if (match && match.array) {
             this.sounds.outputSuccess.play().catch(e => {
                 this.log(`Error playing success sound: ${e}`, 'error');
                 console.log('Error playing sound:', e);
@@ -783,30 +781,33 @@ class SpeechToBrailleApp {
         // Enhance word display with extra information
         const wordInfo = document.createElement('div');
         wordInfo.className = 'word-info';
-        wordInfo.innerHTML = `<span class="word-language">${brailleTranslation.currentLanguage}</span>`;
+        wordInfo.innerHTML = `<span class="word-language">${match.lang || brailleTranslation.currentLanguage}</span>`;
         this.elements.recognizedWord.appendChild(wordInfo);
-        this.log(`Word language info added: ${brailleTranslation.currentLanguage}`, 'debug');
+        this.log(`Word language info added: ${match.lang || brailleTranslation.currentLanguage}`, 'debug');
+        
+        // Clear any previous braille display content
+        this.elements.brailleDisplay.innerHTML = '';
         
         // Log the pattern for debugging
-        console.log("Braille pattern for output:", pattern);
+        console.log("Braille pattern for output:", match.array);
         
         // Create debug information section in output display
         const debugInfo = document.createElement('div');
         debugInfo.className = 'debug-info';
         debugInfo.innerHTML = `
             <div class="debug-label">Pattern Data:</div>
-            <pre>${JSON.stringify(pattern, null, 2)}</pre>
+            <pre>${JSON.stringify(match.array, null, 2)}</pre>
         `;
         this.elements.brailleDisplay.appendChild(debugInfo);
         
         // Render braille cells
         this.log(`Rendering braille pattern to display`, 'debug');
-        brailleTranslation.renderBrailleCells(pattern, this.elements.brailleDisplay);
+        brailleTranslation.renderBrailleCells(match.array, this.elements.brailleDisplay);
         
         // Send to BLE device if connected
         if (bleConnection.isConnected) {
             this.log(`Sending pattern to BLE device...`, 'debug');
-            bleConnection.sendBraillePattern(pattern)
+            bleConnection.sendBraillePattern(match.array)
                 .then(() => {
                     this.log(`Pattern successfully sent to BLE device`, 'success');
                 })
@@ -848,6 +849,7 @@ class SpeechToBrailleApp {
                         });
                 }
                 
+                // Always return to recording phase
                 this.log(`Transitioning back to recording phase`, 'debug');
                 this.transitionToRecordingPhase();
             }
@@ -1161,13 +1163,13 @@ class SpeechToBrailleApp {
                     const numbers = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
                     
                     for (const num of numbers) {
-                        const pattern = brailleTranslation.translateWord(num);
-                        if (pattern) {
+                        const match = brailleTranslation.translateWord(num);
+                        if (match) {
                             this.log(`Testing number: ${num}`, 'info');
-                            brailleTranslation.renderBrailleCells(pattern, container);
+                            brailleTranslation.renderBrailleCells(match.array, container);
                             
                             if (bleConnection.isConnected) {
-                                await bleConnection.sendBraillePattern(pattern);
+                                await bleConnection.sendBraillePattern(match.array);
                             }
                             
                             await new Promise(resolve => setTimeout(resolve, 800));
@@ -1178,9 +1180,9 @@ class SpeechToBrailleApp {
                 } 
                 else {
                     // Test a single character or word
-                    const pattern = brailleTranslation.translateWord(testParam);
+                    const match = brailleTranslation.translateWord(testParam);
                     
-                    if (pattern) {
+                    if (match) {
                         this.log(`Testing pattern for: ${testParam}`, 'info');
                         
                         const container = document.createElement('div');
@@ -1193,13 +1195,13 @@ class SpeechToBrailleApp {
                         container.appendChild(label);
                         
                         // Render braille pattern
-                        brailleTranslation.renderBrailleCells(pattern, container);
+                        brailleTranslation.renderBrailleCells(match.array, container);
                         
                         this.elements.debugOutput.appendChild(container);
                         
                         // Send to hardware if connected
                         if (bleConnection.isConnected) {
-                            await bleConnection.sendBraillePattern(pattern);
+                            await bleConnection.sendBraillePattern(match.array);
                         }
                     } else {
                         this.log(`No pattern found for: ${testParam}`, 'error');

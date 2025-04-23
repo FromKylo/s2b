@@ -8,12 +8,13 @@ class BrailleTranslation {
         this.brailleDatabase = {};
         this.languages = ['UEB', 'Philippine'];
         this.currentLanguage = 'UEB';
+        this.cacheKey = 'brailleDatabase_cache';
     }
 
     /**
      * Initialize the braille database
      */
-    initialize() {
+    async initialize() {
         try {
             // Load from embedded CSV
             this.loadFromEmbeddedCSV();
@@ -255,7 +256,7 @@ nine,nine,⠼⠊,"[[3,4,5,6],[2,4]]",UEB`;
     /**
      * Translates a word to its braille pattern
      * @param {string} word - The word to translate
-     * @returns {Array|null} - The braille dot pattern or null if not found
+     * @returns {Object|null} - The braille pattern info or null if not found
      */
     translateWord(word) {
         if (!word) return null;
@@ -267,7 +268,7 @@ nine,nine,⠼⠊,"[[3,4,5,6],[2,4]]",UEB`;
         const match = this.findWordInDatabase(word);
         if (match) {
             console.log(`Found exact match for "${word}": ${JSON.stringify(match.array)}`);
-            return match.array;
+            return match;
         }
         
         // If no match found and word has multiple characters, try character by character
@@ -294,7 +295,14 @@ nine,nine,⠼⠊,"[[3,4,5,6],[2,4]]",UEB`;
             // Only return if we found patterns for all characters
             if (allFound && letterArrays.length === word.length) {
                 console.log(`Built pattern for "${word}" character-by-character`);
-                return letterArrays;
+                return {
+                    word: word,
+                    array: letterArrays,
+                    braille: '', // No Unicode representation for character-by-character
+                    shortf: '',
+                    lang: this.currentLanguage,
+                    isComposite: true
+                };
             }
         }
         
@@ -325,14 +333,15 @@ nine,nine,⠼⠊,"[[3,4,5,6],[2,4]]",UEB`;
             if (cleanWord.length === 0) continue;
             
             // Find the braille pattern
-            const pattern = this.translateWord(cleanWord);
+            const match = this.translateWord(cleanWord);
             
             // Add to results
-            if (pattern) {
+            if (match) {
                 results.push({
                     word: cleanWord,
-                    array: pattern,
-                    found: true
+                    array: match.array,
+                    found: true,
+                    lang: match.lang
                 });
                 console.log(`Found pattern for "${cleanWord}"`);
             } else {
@@ -350,7 +359,7 @@ nine,nine,⠼⠊,"[[3,4,5,6],[2,4]]",UEB`;
     /**
      * Creates HTML for a visual braille cell representation
      * @param {Array} dotPattern - Array of dot numbers that are active
-     * @returns {string} - HTML string for the braille cell
+     * @returns {Element} - DOM element for the braille cell
      */
     createBrailleCellHTML(dotPattern) {
         const cell = document.createElement('div');
@@ -432,15 +441,15 @@ nine,nine,⠼⠊,"[[3,4,5,6],[2,4]]",UEB`;
                 statusElement.textContent = `Testing: ${item} (${i+1}/${testItems.length})`;
                 
                 // Get braille pattern
-                const pattern = this.translateWord(item);
+                const match = this.translateWord(item);
                 
-                if (pattern) {
+                if (match) {
                     // Display pattern
-                    this.renderBrailleCells(pattern, container);
+                    this.renderBrailleCells(match.array, container);
                     
                     // Send to hardware if callback provided
                     if (sendCallback && typeof sendCallback === 'function') {
-                        await sendCallback(pattern);
+                        await sendCallback(match.array);
                     }
                     
                     // Wait 0.5 seconds
@@ -475,14 +484,14 @@ nine,nine,⠼⠊,"[[3,4,5,6],[2,4]]",UEB`;
         
         // Test alphabet characters
         for (const char of alphabet) {
-            const pattern = this.translateWord(char);
-            if (pattern) {
-                console.log(`Testing '${char}': ${JSON.stringify(pattern)}`);
-                this.renderBrailleCells(pattern, container);
+            const match = this.translateWord(char);
+            if (match) {
+                console.log(`Testing '${char}': ${JSON.stringify(match.array)}`);
+                this.renderBrailleCells(match.array, container);
                 
                 // Send to hardware if callback provided
                 if (sendCallback) {
-                    await sendCallback(pattern);
+                    await sendCallback(match.array);
                 }
                 
                 await delay(800);
