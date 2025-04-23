@@ -1,151 +1,328 @@
+/**
+ * Braille Translation Module
+ * Handles loading and translating words to braille patterns
+ */
+
 class BrailleTranslator {
     constructor() {
-        this.database = {};
-        this.currentLanguage = 'UEB'; // Default language
-        this.loadingPromise = null;
-    }
-
-    async init() {
-        if (!this.loadingPromise) {
-            this.loadingPromise = this.loadDatabase();
-        }
-        return this.loadingPromise;
-    }
-
-    async loadDatabase() {
-        try {
-            // Try to load from CSV first
-            const csvResponse = await fetch('braille-database.csv');
-            if (csvResponse.ok) {
-                const csvText = await csvResponse.text();
-                this.parseCSV(csvText);
-                console.log('Braille database loaded from CSV');
-                return;
-            }
-        } catch (error) {
-            console.warn('Failed to load CSV, trying JSON fallback', error);
-        }
-
-        try {
-            // Fall back to JSON
-            const jsonResponse = await fetch('braille-database.json');
-            if (jsonResponse.ok) {
-                this.database = await jsonResponse.json();
-                console.log('Braille database loaded from JSON');
-                return;
-            }
-        } catch (error) {
-            console.error('Failed to load braille database', error);
-            throw new Error('Could not load braille database');
-        }
-    }
-
-    parseCSV(csvText) {
-        const lines = csvText.split('\n');
-        const header = lines[0].split(',');
-        const languageIndex = {
-            'UEB': header.indexOf('UEB'),
-            'Philippine': header.indexOf('Philippine')
+        // Braille database
+        this.database = [];
+        this.databaseLoaded = false;
+        this.databaseUrl = '../braille-database.csv';
+        
+        // Language support
+        this.languages = ['en', 'es', 'fr']; // English, Spanish, French
+        
+        // Alphabet and numbers for testing
+        this.alphabetAndNumbers = [];
+        
+        // Statistics
+        this.stats = {
+            totalWords: 0,
+            matchedWords: 0,
+            missedWords: 0
         };
-
-        this.database = {
-            UEB: {},
-            Philippine: {}
-        };
-
-        for (let i = 1; i < lines.length; i++) {
-            const line = lines[i].trim();
-            if (!line) continue;
-            
-            const columns = line.split(',');
-            const word = columns[0].toLowerCase();
-            
-            for (const lang in languageIndex) {
-                const idx = languageIndex[lang];
-                if (idx >= 0 && columns[idx]) {
-                    try {
-                        const dotPattern = JSON.parse(columns[idx]);
-                        this.database[lang][word] = dotPattern;
-                    } catch (e) {
-                        console.error(`Error parsing braille pattern for ${word} in ${lang}`, e);
-                    }
+        
+        // Debug logging
+        this.debug = {
+            enabled: false,
+            log: function(message) {
+                if (this.enabled) {
+                    console.log(`[Braille] ${message}`);
                 }
             }
-        }
-    }
-
-    setLanguage(language) {
-        if (this.database[language]) {
-            this.currentLanguage = language;
-            return true;
-        }
-        return false;
-    }
-
-    translateWord(word) {
-        if (!word) return null;
+        };
         
-        // Normalize the word
-        const normalizedWord = word.toLowerCase().trim();
-        
-        // Check if we have a direct translation for the word
-        if (this.database[this.currentLanguage][normalizedWord]) {
-            return {
-                text: word,
-                pattern: this.database[this.currentLanguage][normalizedWord],
-                language: this.currentLanguage
-            };
-        }
-        
-        // If no direct match, try to translate character by character
-        const charPatterns = [];
-        for (let i = 0; i < normalizedWord.length; i++) {
-            const char = normalizedWord[i];
-            if (this.database[this.currentLanguage][char]) {
-                charPatterns.push(this.database[this.currentLanguage][char]);
-            } else {
-                // Skip unknown characters or use a placeholder
-                console.warn(`Character '${char}' not found in braille database`);
-            }
-        }
-        
-        if (charPatterns.length > 0) {
-            return {
-                text: word,
-                pattern: charPatterns,
-                language: this.currentLanguage
-            };
-        }
-        
-        return null;
+        // Load database on initialization
+        this.loadDatabase();
     }
     
-    // Utility to convert pattern to Unicode braille
-    patternToUnicode(pattern) {
-        if (!pattern || pattern.length === 0) return '';
-        
-        // Braille Unicode starts at U+2800
-        const brailleChars = [];
-        
-        for (const cell of pattern) {
-            let code = 0x2800;
-            for (const dot of cell) {
-                // Map dot numbers (1-6) to bit positions
-                switch (dot) {
-                    case 1: code += 0x01; break;
-                    case 2: code += 0x02; break;
-                    case 3: code += 0x04; break;
-                    case 4: code += 0x08; break;
-                    case 5: code += 0x10; break;
-                    case 6: code += 0x20; break;
-                }
+    /**
+     * Load the braille pattern database
+     * @returns {Promise<boolean>} Promise resolving to load success
+     */
+    async loadDatabase() {
+        try {
+            this.debug.log('Loading braille database...');
+            
+            // Fetch the CSV file
+            const response = await fetch(this.databaseUrl);
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
             }
-            brailleChars.push(String.fromCodePoint(code));
+            
+            const csvText = await response.text();
+            
+            // Parse CSV
+            this.database = this.parseCSV(csvText);
+            
+            // Mark as loaded
+            this.databaseLoaded = true;
+            
+            // Create alphabet and numbers list for testing
+            this.createAlphabetAndNumbersList();
+            
+            this.debug.log(`Database loaded: ${this.database.length} entries`);
+            return true;
+        } catch (error) {
+            this.debug.log(`Error loading database: ${error.message}`);
+            return false;
+        }
+    }
+    
+    /**
+     * Parse CSV text into structured database
+     * @param {string} csvText - The CSV text to parse
+     * @returns {Array} Array of braille entries
+     */
+    parseCSV(csvText) {
+        const entries = [];
+        
+        // Split into lines
+        const lines = csvText.split(/\r?\n/);
+        
+        // Parse header
+        const header = lines[0].split(',');
+        
+        // Process each line
+        for (let i = 1; i < lines.length; i++) {
+            // Skip empty lines
+            if (!lines[i].trim()) continue;
+            
+            const fields = this.splitCSVLine(lines[i]);
+            if (fields.length < 3) continue; // Skip invalid entries
+            
+            // Create entry object
+            const entry = {
+                word: fields[0].toLowerCase().trim(),
+                language: fields[1].toLowerCase().trim(),
+                array: this.parseBrailleArray(fields[2])
+            };
+            
+            entries.push(entry);
         }
         
-        return brailleChars.join('');
+        return entries;
+    }
+    
+    /**
+     * Split CSV line handling quotes
+     * @param {string} line - The CSV line to split
+     * @returns {Array} Array of fields
+     */
+    splitCSVLine(line) {
+        const fields = [];
+        let currentField = "";
+        let inQuotes = false;
+        
+        for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            
+            if (char === '"') {
+                inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+                fields.push(currentField);
+                currentField = "";
+            } else {
+                currentField += char;
+            }
+        }
+        
+        // Add the last field
+        fields.push(currentField);
+        
+        return fields;
+    }
+    
+    /**
+     * Parse braille array from string representation
+     * @param {string} arrayString - The string representation of the braille array
+     * @returns {Array} Braille pattern array
+     */
+    parseBrailleArray(arrayString) {
+        try {
+            // Clean up the string and parse it
+            const cleanedString = arrayString
+                .replace(/'/g, '"') // Replace single quotes with double quotes
+                .replace(/\(/g, '[') // Replace parentheses with square brackets
+                .replace(/\)/g, ']');
+            
+            return JSON.parse(cleanedString);
+        } catch (error) {
+            this.debug.log(`Error parsing array: ${arrayString}`);
+            return [];
+        }
+    }
+    
+    /**
+     * Create list of alphabet and numbers for testing
+     */
+    createAlphabetAndNumbersList() {
+        const alphabet = 'abcdefghijklmnopqrstuvwxyz'.split('');
+        const numbers = '0123456789'.split('');
+        
+        // Get English alphabet and numbers
+        this.alphabetAndNumbers = this.database.filter(entry =>
+            entry.language === 'en' && 
+            (alphabet.includes(entry.word) || numbers.includes(entry.word))
+        ).sort((a, b) => {
+            // Sort letters first, then numbers
+            const isALetter = alphabet.includes(a.word);
+            const isBLetter = alphabet.includes(b.word);
+            
+            if (isALetter && !isBLetter) return -1;
+            if (!isALetter && isBLetter) return 1;
+            
+            return a.word.localeCompare(b.word);
+        });
+        
+        this.debug.log(`Created alphabet and numbers list: ${this.alphabetAndNumbers.length} entries`);
+    }
+    
+    /**
+     * Check if the database is loaded
+     * @returns {boolean} Whether database is loaded
+     */
+    isDatabaseLoaded() {
+        return this.databaseLoaded;
+    }
+    
+    /**
+     * Get the number of entries in the database
+     * @returns {number} Number of entries
+     */
+    getDatabaseSize() {
+        return this.database.length;
+    }
+    
+    /**
+     * Find braille pattern for a word
+     * @param {string} word - The word to translate
+     * @param {string} preferredLanguage - The preferred language (optional)
+     * @returns {object} Braille match object
+     */
+    findBraillePattern(word, preferredLanguage = 'en') {
+        if (!this.databaseLoaded || !word) {
+            return { word, found: false };
+        }
+        
+        // Normalize input
+        word = word.toLowerCase().trim();
+        preferredLanguage = preferredLanguage.toLowerCase().trim();
+        
+        // Update statistics
+        this.stats.totalWords++;
+        
+        // Try exact match in preferred language
+        let match = this.database.find(entry => 
+            entry.word === word && entry.language === preferredLanguage
+        );
+        
+        // If not found, try exact match in any language
+        if (!match) {
+            match = this.database.find(entry => entry.word === word);
+        }
+        
+        // If found, return the match
+        if (match) {
+            this.stats.matchedWords++;
+            return { 
+                word,
+                found: true, 
+                array: match.array,
+                language: match.language
+            };
+        }
+        
+        // Not found
+        this.stats.missedWords++;
+        return { word, found: false };
+    }
+    
+    /**
+     * Translate a sentence to braille patterns
+     * @param {string} sentence - The sentence to translate
+     * @param {string} preferredLanguage - The preferred language (optional)
+     * @returns {Array} Array of braille match objects
+     */
+    translateSentence(sentence, preferredLanguage = 'en') {
+        if (!this.databaseLoaded || !sentence) {
+            return [];
+        }
+        
+        // Split the sentence into words
+        const words = sentence.split(/\s+/)
+            .filter(word => word.trim().length > 0)
+            .map(word => word.toLowerCase().trim());
+        
+        // Translate each word
+        const translations = words.map(word => 
+            this.findBraillePattern(word, preferredLanguage)
+        );
+        
+        return translations;
+    }
+    
+    /**
+     * Get statistics
+     * @returns {object} Statistics object
+     */
+    getStatistics() {
+        const matchRate = this.stats.totalWords > 0 
+            ? (this.stats.matchedWords / this.stats.totalWords * 100).toFixed(2) 
+            : 0;
+        
+        return {
+            ...this.stats,
+            matchRate: `${matchRate}%`
+        };
+    }
+    
+    /**
+     * Get alphabet and numbers list
+     * @returns {Array} Alphabet and numbers list
+     */
+    getAlphabetAndNumbers() {
+        return this.alphabetAndNumbers;
+    }
+    
+    /**
+     * Reset statistics
+     */
+    resetStatistics() {
+        this.stats = {
+            totalWords: 0,
+            matchedWords: 0,
+            missedWords: 0
+        };
+    }
+    
+    /**
+     * Get supported languages
+     * @returns {Array} Array of supported languages
+     */
+    getSupportedLanguages() {
+        return this.languages;
+    }
+    
+    /**
+     * Search database for partial matches
+     * @param {string} query - The search query
+     * @returns {Array} Array of matching entries
+     */
+    searchDatabase(query) {
+        if (!this.databaseLoaded || !query) {
+            return [];
+        }
+        
+        query = query.toLowerCase().trim();
+        
+        return this.database
+            .filter(entry => entry.word.includes(query))
+            .sort((a, b) => a.word.localeCompare(b.word))
+            .slice(0, 25); // Limit results
     }
 }
 
-// Create and export a singleton instance
-const brailleTranslator = new BrailleTranslator();
+// Create global instance
+window.brailleTranslator = new BrailleTranslator();

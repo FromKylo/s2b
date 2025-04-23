@@ -1,182 +1,408 @@
+/**
+ * BLE Connection Module
+ * Handles Bluetooth Low Energy connection to braille display hardware
+ */
+
 class BLEConnection {
     constructor() {
-        // BLE configuration
-        this.deviceName = "Braille Display";
-        this.serviceUuid = "19b10000-e8f2-537e-4f6c-d104768a1214";
-        this.characteristicUuid = "19b10001-e8f2-537e-4f6c-d104768a1214";
+        // Check for Web Bluetooth API support
+        this.isSupported = 'bluetooth' in navigator;
         
-        // State management
+        // Device info
         this.device = null;
         this.server = null;
         this.service = null;
         this.characteristic = null;
-        this.isConnected = false;
+        this.connected = false;
+        
+        // Configuration for BLE device
+        this.config = {
+            name: 'BrailleDisplay',
+            namePrefix: 'Braille',
+            serviceUUID: '19b10000-e8f2-537e-4f6c-d104768a1214', // Custom service UUID
+            characteristicUUID: '19b10001-e8f2-537e-4f6c-d104768a1214', // Custom characteristic UUID
+            deviceInfoServiceUUID: '0000180a-0000-1000-8000-00805f9b34fb', // Standard Device Info service
+            firmwareCharUUID: '00002a26-0000-1000-8000-00805f9b34fb',    // Firmware Revision
+            manufacturerCharUUID: '00002a29-0000-1000-8000-00805f9b34fb' // Manufacturer Name
+        };
+        
+        // Connection state management
+        this.reconnectAttempts = 0;
+        this.maxReconnectAttempts = 3;
+        this.autoReconnect = false;
+        this.reconnectDelay = 2000;
+        
+        // Stats for data transfer
+        this.stats = {
+            sentCommands: 0,
+            bytesTransferred: 0,
+            errors: 0,
+            lastSendTime: null,
+            averageSendTime: 0,
+            totalSendTime: 0
+        };
         
         // Callbacks
-        this.callbacks = {
-            onConnected: null,
-            onDisconnected: null,
-            onError: null,
-            onDataSent: null
+        this.onConnectCallback = null;
+        this.onDisconnectCallback = null;
+        this.onErrorCallback = null;
+        
+        // Debug
+        this.debug = {
+            enabled: true,
+            log: function(message) {
+                if (this.enabled) {
+                    console.log(`[BLE] ${message}`);
+                }
+            }
         };
     }
-
+    
+    /**
+     * Check if Web Bluetooth is supported
+     * @returns {boolean} Whether Web Bluetooth is supported
+     */
+    isBLESupported() {
+        return this.isSupported;
+    }
+    
+    /**
+     * Request connection to a Bluetooth device
+     * @returns {Promise} Promise resolving on successful connection
+     */
     async connect() {
-        if (!navigator.bluetooth) {
-            const error = new Error('Bluetooth not supported in this browser');
-            if (this.callbacks.onError) this.callbacks.onError(error);
-            throw error;
+        if (!this.isSupported) {
+            this.debug.log('Web Bluetooth is not supported by this browser');
+            throw new Error('Web Bluetooth not supported');
         }
-
+        
         try {
-            console.log('Requesting Bluetooth device...');
+            this.debug.log('Requesting Bluetooth device...');
             
-            this.device = await navigator.bluetooth.requestDevice({
-                filters: [{ name: this.deviceName }],
-                optionalServices: [this.serviceUuid]
-            });
+            // Request device with specified options
+            const options = {
+                filters: [],
+                optionalServices: [this.config.serviceUUID, this.config.deviceInfoServiceUUID]
+            };
             
-            if (!this.device) {
-                throw new Error('No Bluetooth device selected');
+            // Add name or prefix filter if provided
+            if (this.config.name) {
+                options.filters.push({ name: this.config.name });
+            } else if (this.config.namePrefix) {
+                options.filters.push({ namePrefix: this.config.namePrefix });
+            } else {
+                // If no name filters, use service UUID as filter
+                options.filters.push({ services: [this.config.serviceUUID] });
             }
             
-            // Set up disconnect listener
-            this.device.addEventListener('gattserverdisconnected', this.onDisconnected.bind(this));
+            // Request the device
+            this.device = await navigator.bluetooth.requestDevice(options);
             
-            console.log('Connecting to GATT server...');
+            // Add event listener for disconnection
+            this.device.addEventListener('gattserverdisconnected', this.handleDisconnect.bind(this));
+            
+            // Connect to GATT server
+            this.debug.log('Connecting to GATT server...');
             this.server = await this.device.gatt.connect();
             
-            console.log('Getting primary service...');
-            this.service = await this.server.getPrimaryService(this.serviceUuid);
+            // Get primary service
+            this.debug.log(`Getting primary service (${this.config.serviceUUID})...`);
+            this.service = await this.server.getPrimaryService(this.config.serviceUUID);
             
-            console.log('Getting characteristic...');
-            this.characteristic = await this.service.getCharacteristic(this.characteristicUuid);
+            // Get characteristic
+            this.debug.log(`Getting characteristic (${this.config.characteristicUUID})...`);
+            this.characteristic = await this.service.getCharacteristic(this.config.characteristicUUID);
             
-            this.isConnected = true;
-            console.log('Connected to Braille Display');
+            // Connected
+            this.connected = true;
+            this.reconnectAttempts = 0;
             
-            if (this.callbacks.onConnected) this.callbacks.onConnected();
-            return true;
+            this.debug.log(`Connected to ${this.device.name}`);
             
-        } catch (error) {
-            console.error('BLE connection error:', error);
-            this.isConnected = false;
-            if (this.callbacks.onError) this.callbacks.onError(error);
-            throw error;
-        }
-    }
-
-    async disconnect() {
-        if (this.device && this.device.gatt.connected) {
-            this.device.gatt.disconnect();
-            console.log('Disconnected from device');
-        } else {
-            console.log('No device connected');
-        }
-        
-        this.isConnected = false;
-        this.device = null;
-        this.server = null;
-        this.service = null;
-        this.characteristic = null;
-    }
-
-    onDisconnected() {
-        console.log('Device disconnected');
-        this.isConnected = false;
-        
-        if (this.callbacks.onDisconnected) {
-            this.callbacks.onDisconnected();
-        }
-    }
-
-    async sendBraillePattern(pattern) {
-        if (!this.isConnected || !this.characteristic) {
-            const error = new Error('Not connected to a BLE device');
-            if (this.callbacks.onError) this.callbacks.onError(error);
-            throw error;
-        }
-
-        try {
-            // Format the pattern according to specification: O:[[1,2,5],[3,4]]
-            const formattedPattern = `O:${JSON.stringify(pattern)}`;
-            const encoder = new TextEncoder();
-            const data = encoder.encode(formattedPattern);
+            // Try to get device information
+            this.getDeviceInfo();
             
-            await this.characteristic.writeValue(data);
-            console.log('Sent pattern to device:', formattedPattern);
-            
-            if (this.callbacks.onDataSent) {
-                this.callbacks.onDataSent(formattedPattern);
+            // Call connect callback
+            if (typeof this.onConnectCallback === 'function') {
+                this.onConnectCallback(this.device);
             }
             
-            return true;
+            return {
+                success: true,
+                device: this.device.name
+            };
         } catch (error) {
-            console.error('Error sending pattern:', error);
-            if (this.callbacks.onError) this.callbacks.onError(error);
+            this.connected = false;
+            this.debug.log(`Connection error: ${error.message}`);
+            
+            // Call error callback
+            if (typeof this.onErrorCallback === 'function') {
+                this.onErrorCallback(error);
+            }
+            
             throw error;
         }
     }
-
-    async runSpeedTest() {
-        if (!this.isConnected) {
-            throw new Error('Not connected to BLE device');
+    
+    /**
+     * Handle device disconnection
+     */
+    async handleDisconnect() {
+        const wasConnected = this.connected;
+        this.connected = false;
+        
+        this.debug.log('Device disconnected');
+        
+        // Call disconnect callback if it was previously connected
+        if (wasConnected && typeof this.onDisconnectCallback === 'function') {
+            this.onDisconnectCallback();
         }
-
-        const results = {
-            totalTests: 10,
-            successfulTests: 0,
-            averageTime: 0,
-            startTime: Date.now()
-        };
-
-        // Simple test patterns
-        const testPatterns = [
-            [[1,3,5]],
-            [[1,2,3]],
-            [[4,5,6]],
-            [[1,4]],
-            [[2,5]],
-            [[3,6]],
-            [[1,2,3,4,5,6]],
-            [[1], [2], [3]],
-            [[1,3,5], [2,4,6]],
-            [[]]
-        ];
-
-        const times = [];
-        for (let i = 0; i < testPatterns.length; i++) {
-            const pattern = testPatterns[i];
-            const startTime = performance.now();
+        
+        // Attempt to reconnect if auto-reconnect is enabled
+        if (this.autoReconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
+            this.reconnectAttempts++;
+            
+            this.debug.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+            
+            // Wait before reconnecting
+            await new Promise(resolve => setTimeout(resolve, this.reconnectDelay));
             
             try {
-                await this.sendBraillePattern(pattern);
-                const endTime = performance.now();
-                times.push(endTime - startTime);
-                results.successfulTests++;
+                // Reconnect
+                await this.device.gatt.connect();
+                this.debug.log('Reconnected');
+                this.connected = true;
+                
+                // Reset reconnect attempts
+                this.reconnectAttempts = 0;
+                
+                // Call connect callback
+                if (typeof this.onConnectCallback === 'function') {
+                    this.onConnectCallback(this.device);
+                }
             } catch (error) {
-                console.error(`Test ${i+1} failed:`, error);
+                this.debug.log(`Reconnection failed: ${error.message}`);
+            }
+        }
+    }
+    
+    /**
+     * Disconnect from the device
+     */
+    disconnect() {
+        if (!this.connected || !this.device) {
+            return;
+        }
+        
+        this.debug.log('Disconnecting...');
+        
+        // Disable auto-reconnect before disconnecting
+        this.autoReconnect = false;
+        
+        // Disconnect from GATT server
+        if (this.device.gatt.connected) {
+            this.device.gatt.disconnect();
+        }
+        
+        this.connected = false;
+    }
+    
+    /**
+     * Check if connected to a device
+     * @returns {boolean} Whether connected
+     */
+    isConnected() {
+        return this.connected && this.device && this.device.gatt.connected;
+    }
+    
+    /**
+     * Get connected device name
+     * @returns {string|null} Device name or null if not connected
+     */
+    getDeviceName() {
+        return this.device ? this.device.name : null;
+    }
+    
+    /**
+     * Get device information
+     * @returns {Promise<Object>} Promise resolving to device info
+     */
+    async getDeviceInfo() {
+        if (!this.isConnected()) {
+            throw new Error('Not connected to a device');
+        }
+        
+        try {
+            const info = {};
+            
+            // Try to get device information service
+            try {
+                const deviceInfoService = await this.server.getPrimaryService(this.config.deviceInfoServiceUUID);
+                
+                // Try to get firmware revision
+                try {
+                    const firmwareChar = await deviceInfoService.getCharacteristic(this.config.firmwareCharUUID);
+                    const value = await firmwareChar.readValue();
+                    info.firmware = new TextDecoder().decode(value);
+                } catch (e) {
+                    this.debug.log('Firmware information not available');
+                }
+                
+                // Try to get manufacturer name
+                try {
+                    const manufacturerChar = await deviceInfoService.getCharacteristic(this.config.manufacturerCharUUID);
+                    const value = await manufacturerChar.readValue();
+                    info.manufacturer = new TextDecoder().decode(value);
+                } catch (e) {
+                    this.debug.log('Manufacturer information not available');
+                }
+            } catch (e) {
+                this.debug.log('Device information service not available');
             }
             
-            // Add a small delay between tests
-            await new Promise(resolve => setTimeout(resolve, 500));
+            this.debug.log('Device info:', info);
+            return info;
+        } catch (error) {
+            this.debug.log(`Error getting device info: ${error.message}`);
+            return {};
         }
-
-        results.endTime = Date.now();
-        results.totalTime = results.endTime - results.startTime;
-        results.averageTime = times.length ? times.reduce((a, b) => a + b, 0) / times.length : 0;
-        
-        return results;
     }
-
-    on(event, callback) {
-        if (this.callbacks.hasOwnProperty(event)) {
-            this.callbacks[event] = callback;
-            return true;
+    
+    /**
+     * Send data to the connected device
+     * @param {Array|ArrayBuffer|DataView} data - The data to send
+     * @returns {Promise<boolean>} Promise resolving to success status
+     */
+    async sendData(data) {
+        if (!this.isConnected()) {
+            throw new Error('Not connected to a device');
         }
-        return false;
+        
+        try {
+            // Start timing
+            const startTime = performance.now();
+            
+            // Make sure data is in the correct format
+            let dataToSend;
+            if (data instanceof ArrayBuffer) {
+                dataToSend = data;
+            } else if (data instanceof DataView) {
+                dataToSend = data.buffer;
+            } else if (Array.isArray(data)) {
+                // Convert array to ArrayBuffer
+                dataToSend = new Uint8Array(data).buffer;
+            } else {
+                throw new Error('Data must be an Array, ArrayBuffer, or DataView');
+            }
+            
+            // Send the data
+            await this.characteristic.writeValue(dataToSend);
+            
+            // End timing
+            const endTime = performance.now();
+            const sendTime = endTime - startTime;
+            
+            // Update stats
+            this.stats.sentCommands++;
+            this.stats.bytesTransferred += dataToSend.byteLength;
+            this.stats.lastSendTime = sendTime;
+            this.stats.totalSendTime += sendTime;
+            this.stats.averageSendTime = this.stats.totalSendTime / this.stats.sentCommands;
+            
+            this.debug.log(`Data sent (${dataToSend.byteLength} bytes) in ${sendTime.toFixed(2)}ms`);
+            return true;
+        } catch (error) {
+            this.stats.errors++;
+            this.debug.log(`Error sending data: ${error.message}`);
+            
+            // Call error callback
+            if (typeof this.onErrorCallback === 'function') {
+                this.onErrorCallback(error);
+            }
+            
+            throw error;
+        }
+    }
+    
+    /**
+     * Send braille pattern to the device
+     * @param {Array} braillePattern - Array of braille pattern arrays
+     * @returns {Promise<boolean>} Promise resolving to success status
+     */
+    async sendBraillePattern(braillePattern) {
+        if (!Array.isArray(braillePattern)) {
+            throw new Error('Braille pattern must be an array');
+        }
+        
+        // Flatten the pattern if it's a 2D array
+        let flatPattern;
+        if (Array.isArray(braillePattern[0])) {
+            flatPattern = braillePattern.flat();
+        } else {
+            flatPattern = braillePattern;
+        }
+        
+        // Convert to byte array
+        const byteArray = new Uint8Array(flatPattern);
+        
+        // Send data
+        return this.sendData(byteArray.buffer);
+    }
+    
+    /**
+     * Set auto-reconnect option
+     * @param {boolean} enable - Whether to enable auto-reconnect
+     */
+    setAutoReconnect(enable) {
+        this.autoReconnect = !!enable;
+    }
+    
+    /**
+     * Get connection statistics
+     * @returns {Object} Connection statistics
+     */
+    getStats() {
+        return { ...this.stats };
+    }
+    
+    /**
+     * Reset statistics
+     */
+    resetStats() {
+        this.stats = {
+            sentCommands: 0,
+            bytesTransferred: 0,
+            errors: 0,
+            lastSendTime: null,
+            averageSendTime: 0,
+            totalSendTime: 0
+        };
+    }
+    
+    /**
+     * Set callback for connect event
+     * @param {Function} callback - Connect callback
+     */
+    onConnect(callback) {
+        this.onConnectCallback = callback;
+    }
+    
+    /**
+     * Set callback for disconnect event
+     * @param {Function} callback - Disconnect callback
+     */
+    onDisconnect(callback) {
+        this.onDisconnectCallback = callback;
+    }
+    
+    /**
+     * Set callback for error event
+     * @param {Function} callback - Error callback
+     */
+    onError(callback) {
+        this.onErrorCallback = callback;
     }
 }
 
-// Create and export a singleton instance
-const bleConnection = new BLEConnection();
+// Create global instance
+window.bleConnection = new BLEConnection();
