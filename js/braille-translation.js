@@ -267,7 +267,117 @@ nine,nine,⠼⠊,"[[3,4,5,6],[2,4]]",UEB`;
     }
 
     /**
-     * Translates a word to its braille pattern
+     * Process recognized speech to find matching braille patterns
+     * @param {string} text - The recognized speech text
+     * @returns {Array} - Array of words with their matching braille patterns
+     */
+    processRecognizedSpeech(text) {
+        if (!text || typeof text !== 'string') return [];
+        
+        // Split the text into words
+        const words = text.trim().toLowerCase().split(/\s+/);
+        const results = [];
+        
+        console.log(`Processing ${words.length} words from speech: "${text}"`);
+        
+        // If no words found, return a placeholder result to ensure output phase still shows
+        if (words.length === 0 || (words.length === 1 && words[0] === '')) {
+            return [{
+                word: "no speech detected",
+                found: false,
+                isEmpty: true,
+                // Add a default array so hardware display still shows something
+                array: [[1,2,3]] // Default pattern - can be changed to whatever makes sense
+            }];
+        }
+        
+        for (const word of words) {
+            // Skip empty words
+            if (!word) continue;
+            
+            // Clean the word of punctuation
+            const cleanWord = word.replace(/[^\w]/g, '');
+            if (cleanWord.length === 0) continue;
+            
+            // Find the braille pattern
+            const match = this.translateWord(cleanWord);
+            
+            // Add to results
+            if (match) {
+                results.push({
+                    word: cleanWord,
+                    array: match.array,
+                    found: true,
+                    lang: match.lang
+                });
+                console.log(`Found pattern for "${cleanWord}"`);
+            } else {
+                // Even when no match found, provide a basic pattern
+                // This ensures the hardware always shows something
+                results.push({
+                    word: cleanWord, 
+                    found: false,
+                    // Use first letter if possible or a default pattern
+                    array: this.getFallbackPattern(cleanWord)
+                });
+                console.log(`No pattern found for "${cleanWord}", using fallback pattern`);
+            }
+        }
+        
+        return results;
+    }
+
+    /**
+     * Get a fallback pattern when no exact match is found
+     * @param {string} word - Word to generate fallback pattern for
+     * @returns {Array} - A dot pattern array that can be displayed
+     */
+    getFallbackPattern(word) {
+        // Try to get pattern for first letter
+        if (word && word.length > 0) {
+            const firstChar = word[0];
+            const charMatch = this.findWordInDatabase(firstChar);
+            if (charMatch && charMatch.array) {
+                console.log(`Using first letter "${firstChar}" pattern as fallback`);
+                return charMatch.array;
+            }
+        }
+        
+        // Emergency fallback if nothing else works
+        // This pattern creates a single dot in position 3 (bottom left)
+        // which is distinctive and indicates "not found" visually
+        return [[3]];
+    }
+
+    /**
+     * Get the best match from processed speech results
+     * This helps the output phase always have something to display
+     * @param {Array} speechResults - Results from processRecognizedSpeech
+     * @returns {Object} - Best match or placeholder if no matches
+     */
+    getBestMatchForDisplay(speechResults) {
+        if (!speechResults || speechResults.length === 0) {
+            return { 
+                word: "no speech detected",
+                found: false,
+                isEmpty: true,
+                array: [[3,6]] // Distinctive pattern for "no speech"
+            };
+        }
+        
+        // First try to find any matched word
+        const foundMatch = speechResults.find(result => result.found);
+        if (foundMatch) {
+            return foundMatch;
+        }
+        
+        // If no matches, return the first result
+        // We now ensure it has an array property from processRecognizedSpeech
+        return speechResults[0];
+    }
+
+    /**
+     * Translates a word to its braille pattern with improved matching algorithm
      * @param {string} word - The word to translate
      * @returns {Object|null} - The braille pattern info or null if not found
      */
@@ -277,11 +387,25 @@ nine,nine,⠼⠊,"[[3,4,5,6],[2,4]]",UEB`;
         // Clean and normalize the input word
         word = word.toLowerCase().trim();
         
-        // First try to find the exact word in the database (using the more comprehensive method)
+        // First try to find the exact word in the database
         const match = this.findWordInDatabase(word);
         if (match) {
             console.log(`Found exact match for "${word}": ${JSON.stringify(match.array)}`);
             return match;
+        }
+        
+        // Try alternate forms (common plurals, tenses) - add more as needed
+        const alternates = this.generateAlternateForms(word);
+        for (const altWord of alternates) {
+            const altMatch = this.findWordInDatabase(altWord);
+            if (altMatch) {
+                console.log(`Found match for alternate form "${altWord}" from "${word}"`);
+                return {
+                    ...altMatch,
+                    isAlternateForm: true,
+                    originalWord: word
+                };
+            }
         }
         
         // If no match found and word has multiple characters, try character by character
@@ -324,83 +448,42 @@ nine,nine,⠼⠊,"[[3,4,5,6],[2,4]]",UEB`;
     }
 
     /**
-     * Process recognized speech to find matching braille patterns
-     * @param {string} text - The recognized speech text
-     * @returns {Array} - Array of words with their matching braille patterns
+     * Generate common alternate forms of words to improve matching
+     * @param {string} word - Original word
+     * @returns {Array} - Array of alternate forms to try
      */
-    processRecognizedSpeech(text) {
-        if (!text || typeof text !== 'string') return [];
+    generateAlternateForms(word) {
+        const alternates = [];
         
-        // Split the text into words
-        const words = text.trim().toLowerCase().split(/\s+/);
-        const results = [];
-        
-        console.log(`Processing ${words.length} words from speech: "${text}"`);
-        
-        // If no words found, return a placeholder result to ensure output phase still shows
-        if (words.length === 0 || (words.length === 1 && words[0] === '')) {
-            return [{
-                word: "no speech detected",
-                found: false,
-                isEmpty: true
-            }];
+        // Simple plural handling (English)
+        if (word.endsWith('s')) {
+            alternates.push(word.slice(0, -1)); // Remove trailing 's'
+        } else {
+            alternates.push(word + 's'); // Add 's'
         }
         
-        for (const word of words) {
-            // Skip empty words
-            if (!word) continue;
-            
-            // Clean the word of punctuation
-            const cleanWord = word.replace(/[^\w]/g, '');
-            if (cleanWord.length === 0) continue;
-            
-            // Find the braille pattern
-            const match = this.translateWord(cleanWord);
-            
-            // Add to results
-            if (match) {
-                results.push({
-                    word: cleanWord,
-                    array: match.array,
-                    found: true,
-                    lang: match.lang
-                });
-                console.log(`Found pattern for "${cleanWord}"`);
-            } else {
-                results.push({
-                    word: cleanWord, 
-                    found: false
-                });
-                console.log(`No pattern found for "${cleanWord}"`);
-            }
+        // Common endings
+        if (word.endsWith('ing')) {
+            // base form
+            alternates.push(word.slice(0, -3));
+            // with 'e' (like 'make' from 'making')
+            alternates.push(word.slice(0, -3) + 'e');
         }
         
-        return results;
-    }
-
-    /**
-     * Get the best match from processed speech results
-     * This helps the output phase always have something to display
-     * @param {Array} speechResults - Results from processRecognizedSpeech
-     * @returns {Object} - Best match or placeholder if no matches
-     */
-    getBestMatchForDisplay(speechResults) {
-        if (!speechResults || speechResults.length === 0) {
-            return { 
-                word: "no speech detected",
-                found: false,
-                isEmpty: true
-            };
+        if (word.endsWith('ed')) {
+            // base form
+            alternates.push(word.slice(0, -2));
+            // with 'e' (like 'bake' from 'baked')
+            alternates.push(word.slice(0, -1));
         }
         
-        // First try to find any matched word
-        const foundMatch = speechResults.find(result => result.found);
-        if (foundMatch) {
-            return foundMatch;
+        // Try variations with/without hyphen or spaces for compound words
+        if (word.includes('-')) {
+            alternates.push(word.replace(/-/g, ''));
+            alternates.push(word.replace(/-/g, ' '));
         }
         
-        // If no matches, return the first result
-        return speechResults[0];
+        return alternates;
     }
 
     /**
@@ -689,6 +772,72 @@ nine,nine,⠼⠊,"[[3,4,5,6],[2,4]]",UEB`;
         
         // Return the database for further inspection
         return this.brailleDatabase;
+    }
+
+    /**
+     * Debug function to simulate output phase with a specific word
+     * @param {string} word - Word to translate and display
+     * @param {boolean} activateOutputPhase - Whether to trigger output phase in the app
+     * @param {Element} [container] - Optional container to display the braille pattern
+     * @returns {Object|null} - The translation result or null if not found
+     */
+    debugSimulateOutput(word, activateOutputPhase = true, container = null) {
+        console.group(`Debug: Simulating output for "${word}"`);
+        
+        // Find braille pattern for this word
+        const match = this.translateWord(word);
+        
+        if (match) {
+            console.log(`Found braille pattern for "${word}":`, match);
+            
+            // Display in container if provided
+            if (container instanceof Element) {
+                this.renderBrailleCells(match.array, container);
+            }
+            
+            // Create a result object similar to what processRecognizedSpeech would return
+            const result = [{
+                word: word,
+                array: match.array,
+                found: true,
+                lang: match.lang,
+                isDebug: true
+            }];
+            
+            // Activate output phase if requested
+            if (activateOutputPhase && window.startOutputPhase) {
+                console.log('Activating output phase with this result');
+                // Store original transcript and replace with our debug word
+                const originalTranscript = window.currentTranscript || '';
+                window.currentTranscript = word;
+                
+                // Override the normal processRecognizedSpeech result for this session
+                const originalProcessFunction = this.processRecognizedSpeech;
+                this.processRecognizedSpeech = function() {
+                    console.log('Using debug result for speech processing');
+                    // Restore original function after use
+                    setTimeout(() => {
+                        this.processRecognizedSpeech = originalProcessFunction;
+                    }, 100);
+                    return result;
+                }.bind(this);
+                
+                // Start output phase
+                window.startOutputPhase();
+                
+                // Restore original transcript after a delay
+                setTimeout(() => {
+                    window.currentTranscript = originalTranscript;
+                }, 100);
+            }
+            
+            console.groupEnd();
+            return result;
+        } else {
+            console.log(`No braille pattern found for "${word}"`);
+            console.groupEnd();
+            return null;
+        }
     }
 
     /**

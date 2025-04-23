@@ -329,6 +329,77 @@ Tests the communication speed between the web app and the hardware:
 3. The device measures receipt time and packet count
 4. Results show bytes/second throughput
 
+### Debug Output Phase
+
+The system includes a debug function to test the output phase without requiring speech input. This is useful for testing specific words or troubleshooting the braille display.
+
+#### Using the Debug Function
+
+You can access this functionality through the browser console:
+
+```javascript
+// Test a specific word and show its braille pattern
+brailleTranslation.debugSimulateOutput("hello");
+
+// Test without activating output phase
+brailleTranslation.debugSimulateOutput("world", false);
+
+// Test and display in a specific container
+brailleTranslation.debugSimulateOutput("test", true, document.getElementById('braille-output'));
+```
+
+#### Parameters
+
+- `word` (string): The word to translate into braille
+- `activateOutputPhase` (boolean, default: true): Whether to trigger the output phase UI
+- `container` (Element, optional): DOM element to render the braille pattern
+
+#### Adding a Debug Button
+
+You can add a debug button to your interface with this code:
+
+```javascript
+function addOutputPhaseDebugButton() {
+  const btn = document.createElement('button');
+  btn.textContent = 'Debug Output Phase';
+  btn.style.position = 'fixed';
+  btn.style.bottom = '10px';
+  btn.style.right = '10px';
+  btn.style.zIndex = '1000';
+  btn.style.backgroundColor = '#4CAF50';
+  btn.style.color = 'white';
+  btn.style.border = 'none';
+  btn.style.borderRadius = '4px';
+  btn.style.padding = '8px 12px';
+  
+  btn.addEventListener('click', () => {
+    const word = prompt('Enter a word to test in output phase:');
+    if (word) {
+      brailleTranslation.debugSimulateOutput(word, true);
+    }
+  });
+  
+  document.body.appendChild(btn);
+}
+
+// Call this function to add the debug button
+addOutputPhaseDebugButton();
+```
+
+#### Troubleshooting False Negatives
+
+If you're experiencing words not being found in the output phase:
+
+1. Use the debug function to test specific words directly
+2. Check if the word exists in the database with `brailleTranslation.debugDumpDatabase()`
+3. Try alternate spellings or forms of the word
+4. Verify the correct language is set with `brailleTranslation.setPrimaryLanguage('UEB')` or `brailleTranslation.setPrimaryLanguage('Philippine')`
+
+The system includes built-in fallback mechanisms:
+- If a word isn't found, it will try common alternate forms (plurals, tense variations)
+- If still not found, it will try to build the pattern character-by-character
+- As a last resort, it will show a pattern using the first letter of the word
+
 ## Mobile-Specific Features
 
 The application detects mobile devices and adapts the UI accordingly:
