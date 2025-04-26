@@ -818,8 +818,13 @@ class SpeechToBrailleApp {
             this.lastFromOutput = false;
         }
         
-        // Start the timer for the new phase
-        this.startPhaseTimer();
+        // Start the timer for the new phase, but only if we're not in OUTPUT phase
+        if (phase !== PHASE.OUTPUT) {
+            this.startPhaseTimer();
+        } else {
+            // When entering output phase, just make sure timer display shows the frozen listening time
+            this.updatePhaseTimer();
+        }
         
         this.log(`Phase changed to: ${phase}`);
     }
