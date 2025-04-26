@@ -156,6 +156,12 @@ class SpeechToBrailleApp {
         this.isListeningActive = false;
         this.listeningTimer = null;
         
+        // Phase timer properties
+        this.phaseStartTime = Date.now();
+        this.phaseTimer = null;
+        this.accumulatedListeningTime = 0;
+        this.lastFromOutput = false;
+        
         // DOM elements
         this.elements = {
             phaseContainers: {
@@ -181,7 +187,12 @@ class SpeechToBrailleApp {
             audioWave: document.querySelector('.audio-wave'),
             permissionStatus: document.querySelector('.permission-status'),
             grantPermissionButton: document.getElementById('grant-permission'),
-            testButton: document.getElementById('braille-test-btn')
+            testButton: document.getElementById('braille-test-btn'),
+            
+            // Phase timer elements
+            phaseTimer: document.getElementById('phase-timer'),
+            phaseTimerValue: document.getElementById('phase-timer-value'),
+            currentPhaseName: document.getElementById('current-phase-name')
         };
         
         if (this.isMobileDevice) {
@@ -776,6 +787,9 @@ class SpeechToBrailleApp {
     }
 
     switchPhase(phase) {
+        // Store the previous phase before switching
+        const previousPhase = this.currentPhase;
+        
         Object.values(this.elements.phaseContainers).forEach(container => {
             if (container) container.classList.remove('active');
         });
@@ -785,6 +799,23 @@ class SpeechToBrailleApp {
         }
         
         this.currentPhase = phase;
+        
+        // Handle phase timer
+        this.pausePhaseTimer();
+        
+        // Reset timer if transitioning from output to recording
+        if (previousPhase === PHASE.OUTPUT && phase === PHASE.RECORDING) {
+            this.resetPhaseTimer();
+        }
+        
+        // If we're going to recording phase from something other than output,
+        // we don't reset the accumulated time
+        if (phase === PHASE.RECORDING && previousPhase !== PHASE.OUTPUT) {
+            this.lastFromOutput = false;
+        }
+        
+        // Start the timer for the new phase
+        this.startPhaseTimer();
         
         this.log(`Phase changed to: ${phase}`);
     }
@@ -1052,6 +1083,83 @@ class SpeechToBrailleApp {
                     }
                 });
             }
+        }
+    }
+
+    // Add the phase timer methods
+    startPhaseTimer() {
+        // Set the initial start time
+        this.phaseStartTime = Date.now();
+        
+        // Clear any existing timer
+        if (this.phaseTimer) {
+            clearInterval(this.phaseTimer);
+        }
+        
+        // Update phase name in the timer
+        const phaseName = this.currentPhase.charAt(0).toUpperCase() + this.currentPhase.slice(1);
+        if (this.elements.currentPhaseName) {
+            this.elements.currentPhaseName.textContent = phaseName;
+        }
+        
+        // Update phase timer class
+        if (this.elements.phaseTimer) {
+            this.elements.phaseTimer.className = `phase-timer ${this.currentPhase}`;
+        }
+        
+        // Start the interval to update the timer
+        this.phaseTimer = setInterval(() => {
+            this.updatePhaseTimer();
+        }, 100); // Update every 100ms for smoother timer display
+        
+        this.updatePhaseTimer(); // Update immediately once
+    }
+    
+    updatePhaseTimer() {
+        if (!this.elements.phaseTimerValue) return;
+        
+        const now = Date.now();
+        let elapsed;
+        
+        // If recording phase and not coming from output, accumulate time
+        if (this.currentPhase === PHASE.RECORDING && !this.lastFromOutput) {
+            elapsed = this.accumulatedListeningTime + (now - this.phaseStartTime);
+        } else {
+            elapsed = now - this.phaseStartTime;
+        }
+        
+        // Format the elapsed time as mm:ss.d
+        const minutes = Math.floor(elapsed / 60000);
+        const seconds = Math.floor((elapsed % 60000) / 1000);
+        const deciseconds = Math.floor((elapsed % 1000) / 100);
+        
+        const formattedTime = 
+            `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${deciseconds}`;
+            
+        this.elements.phaseTimerValue.textContent = formattedTime;
+    }
+    
+    resetPhaseTimer() {
+        // Reset the accumulated time and set lastFromOutput flag
+        this.accumulatedListeningTime = 0;
+        this.lastFromOutput = true;
+        this.phaseStartTime = Date.now();
+        
+        if (this.elements.phaseTimerValue) {
+            this.elements.phaseTimerValue.textContent = "00:00.0";
+        }
+    }
+    
+    pausePhaseTimer() {
+        // When transitioning from recording to output, store the accumulated time
+        if (this.currentPhase === PHASE.RECORDING) {
+            const now = Date.now();
+            this.accumulatedListeningTime += (now - this.phaseStartTime);
+        }
+        
+        if (this.phaseTimer) {
+            clearInterval(this.phaseTimer);
+            this.phaseTimer = null;
         }
     }
 }

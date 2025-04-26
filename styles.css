@@ -587,3 +587,57 @@ button {
     padding: 5px;
     border: 1px solid rgba(0, 0, 0, 0.1);
 }
+
+/* Add these styles for the floating phase timer window */
+.phase-timer {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 10px 15px;
+    border-radius: 8px;
+    font-size: 1rem;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 120px;
+}
+
+.phase-timer-title {
+    font-size: 0.8rem;
+    margin-bottom: 5px;
+    text-transform: capitalize;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.phase-timer-value {
+    font-family: monospace;
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+.phase-timer.recording {
+    background-color: rgba(0, 123, 255, 0.8);
+}
+
+.phase-timer.output {
+    background-color: rgba(40, 167, 69, 0.8);
+}
+
+/* Mobile optimization for phase timer */
+@media (max-width: 768px) {
+    .phase-timer {
+        top: 60px;
+        right: 10px;
+        padding: 8px 12px;
+        font-size: 0.9rem;
+        min-width: 100px;
+    }
+    
+    .phase-timer-value {
+        font-size: 1.1rem;
+    }
+}
