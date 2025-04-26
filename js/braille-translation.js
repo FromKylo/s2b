@@ -136,7 +136,8 @@ much,mh,⠍⠓,"[[1,3,4],[1,2,5]]",UEB
 myself,mf,⠍⠋,"[[1,3,4],[1,2,4]]",UEB
 ng,ng,⠝⠛,"[[1,3,4,5],[1,2,4,5]]",Philippine
 bakit,b,⠃,"[[1,2]]",Philippine
-kanya/kaniya,c,⠉,"[[1,4]]",Philippine
+kanya,c,⠉,"[[1,4]]",Philippine
+kaniya,c,⠉,"[[1,4]]",Philippine
 dahil,d,⠙,"[[1,4,5]]",Philippine
 paano,f,⠋,"[[1,2,4]]",Philippine
 ganoon,g,⠛,"[[1,2,4,5]]",Philippine
