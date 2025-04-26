@@ -804,13 +804,17 @@ class SpeechToBrailleApp {
         this.pausePhaseTimer();
         
         // Reset timer if transitioning from output to recording
-        if (previousPhase === PHASE.OUTPUT && phase === PHASE.RECORDING) {
+        // or from introduction to recording
+        if ((previousPhase === PHASE.OUTPUT && phase === PHASE.RECORDING) || 
+            (previousPhase === PHASE.INTRODUCTION && phase === PHASE.RECORDING)) {
             this.resetPhaseTimer();
         }
         
         // If we're going to recording phase from something other than output,
         // we don't reset the accumulated time
-        if (phase === PHASE.RECORDING && previousPhase !== PHASE.OUTPUT) {
+        if (phase === PHASE.RECORDING && 
+            previousPhase !== PHASE.OUTPUT && 
+            previousPhase !== PHASE.INTRODUCTION) {
             this.lastFromOutput = false;
         }
         
@@ -1096,8 +1100,14 @@ class SpeechToBrailleApp {
             clearInterval(this.phaseTimer);
         }
         
-        // Update phase name in the timer
-        const phaseName = this.currentPhase.charAt(0).toUpperCase() + this.currentPhase.slice(1);
+        // Update phase name in the timer - special case for Recording phase to show as Listening
+        let phaseName;
+        if (this.currentPhase === PHASE.RECORDING) {
+            phaseName = "Listening";
+        } else {
+            phaseName = this.currentPhase.charAt(0).toUpperCase() + this.currentPhase.slice(1);
+        }
+        
         if (this.elements.currentPhaseName) {
             this.elements.currentPhaseName.textContent = phaseName;
         }
@@ -1128,13 +1138,12 @@ class SpeechToBrailleApp {
             elapsed = now - this.phaseStartTime;
         }
         
-        // Format the elapsed time as mm:ss.d
-        const minutes = Math.floor(elapsed / 60000);
-        const seconds = Math.floor((elapsed % 60000) / 1000);
-        const deciseconds = Math.floor((elapsed % 1000) / 100);
+        // Format the elapsed time as ss.ms (seconds and milliseconds)
+        const seconds = Math.floor(elapsed / 1000);
+        const milliseconds = Math.floor(elapsed % 1000);
         
         const formattedTime = 
-            `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${deciseconds}`;
+            `${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(3, '0')}`;
             
         this.elements.phaseTimerValue.textContent = formattedTime;
     }
@@ -1296,11 +1305,7 @@ function processRecognizedWord(word, isFinal = false) {
 }
 
 /**
- * Process full recognized text
- */
-function processRecognizedText(text) {
-    if (!text || text.length === 0) return;
-    
+ * Process full recognized
     // Display the recognized text
     displayRecognizedText(text, false);
     
