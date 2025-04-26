@@ -11,7 +11,7 @@ const ASSETS_TO_CACHE = [
     '/js/app.js',
     '/js/speech-recognition.js',
     '/js/braille-translation.js',
-    '/js/ble-connection.js',
+    '/js/ble-handler.js',
     '/braille-database.csv',
     '/manifest.json',
     '/images/icon-192x192.png',

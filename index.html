@@ -9,10 +9,16 @@
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="images/icon-192x192.png">
     <link rel="apple-touch-icon" href="images/icon-192x192.png">
+    <!-- Add the debug CSS -->
+    <link rel="stylesheet" href="css/debug.css">
+    <!-- Add this inside the HEAD element -->
+    <script src="js/braille-translation.js" defer></script>
+    <script src="js/speech-recognition.js" defer></script>
+    <script src="js/app.js" defer></script>
 </head>
 <body>
     <header>
-        <h1>Speech to Braille</h1>
+        <h3>Speech-to-Braille</h3>
         <div id="ble-status" class="status-indicator disconnected">
             <span class="status-dot"></span>
             <span class="status-text">Disconnected</span>
@@ -59,16 +65,16 @@
                 </div>
                 <div class="countdown-timer">Returning to listening in <span id="output-countdown">8</span> seconds...</div>
                 <div class="controls">
-                    <button id="braille-test-btn" class="btn btn-secondary">Test All Letters & Numbers</button>
+                    <button id="braille-test-btn" class="btn">Test Braille Display</button>
                     <button id="clear-cache-btn" class="btn btn-small">Clear Database Cache</button>
                 </div>
             </div>
         </div>
         
     <footer>
+        <div class="attribution">Made by kiloJoules. Future graduate cuties!</div>
         <div class="control-panel">
             <button id="connect-ble" class="primary-btn">Connect Braille Display</button>
-            <button id="test-braille" class="secondary-btn">Test Braille</button>
             <button id="toggle-debug" class="secondary-btn">Debug Console</button>
         </div>
         <div id="debug-console" class="debug-console hidden">
@@ -83,7 +89,7 @@
 
     <script src="js/braille-translation.js"></script>
     <script src="js/speech-recognition.js"></script>
-    <script src="js/ble-connection.js"></script>
+    <script src="js/ble-handler.js"></script>
     <script src="js/app.js"></script>
     <script>
         // Register service worker

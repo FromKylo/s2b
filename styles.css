@@ -150,13 +150,23 @@ footer {
 
 .braille-cell {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    grid-gap: 10px;
+    /* Change from 2 columns to 2 rows with 3 columns each to achieve the 1-4, 2-5, 3-6 layout */
+    grid-template-columns: repeat(2, 20px);
+    grid-template-rows: repeat(3, 20px);
+    gap: 10px;
     padding: 15px;
     border: 2px solid #dee2e6;
     border-radius: 10px;
     background-color: white;
 }
+
+/* Add explicit grid positioning for each dot */
+.braille-dot[data-dot="1"] { grid-area: 1 / 1; } /* Top left */
+.braille-dot[data-dot="4"] { grid-area: 1 / 2; } /* Top right */
+.braille-dot[data-dot="2"] { grid-area: 2 / 1; } /* Middle left */
+.braille-dot[data-dot="5"] { grid-area: 2 / 2; } /* Middle right */
+.braille-dot[data-dot="3"] { grid-area: 3 / 1; } /* Bottom left */
+.braille-dot[data-dot="6"] { grid-area: 3 / 2; } /* Bottom right */
 
 .braille-dot {
     width: 20px;

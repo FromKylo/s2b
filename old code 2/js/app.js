@@ -422,11 +422,6 @@ class SpeechToBrailleApp {
             this.startIntroPhaseWithCountdown();
         });
         
-        // Test button
-        document.getElementById('test-btn').addEventListener('click', () => {
-            this.testBraillePatterns();
-        });
-        
         // Language selection
         document.getElementById('language-select').addEventListener('change', (e) => {
             const language = e.target.value;
@@ -454,11 +449,6 @@ class SpeechToBrailleApp {
             
             // Log debug console activation
             logDebug('Debug console toggled');
-        });
-        
-        // Add debug layout test button listener
-        document.getElementById('debug-test-braille').addEventListener('click', () => {
-            this.testBrailleLayout();
         });
         
         // Clear debug output

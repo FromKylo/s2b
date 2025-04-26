@@ -1,0 +1,79 @@
+/* Database Search Styling */
+#db-search-container {
+    margin-bottom: 15px;
+    padding: 10px;
+    background: #1a1a1a;
+    border-radius: 5px;
+}
+
+#db-search-container h3 {
+    margin-top: 0;
+    color: #4CAF50;
+    font-size: 16px;
+}
+
+.search-form {
+    display: flex;
+    gap: 8px;
+}
+
+#db-search-input {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid #333;
+    border-radius: 4px;
+    background: #222;
+    color: #fff;
+}
+
+#db-search-button {
+    padding: 8px 15px;
+    background: #2196F3;
+    border: none;
+    border-radius: 4px;
+    color: white;
+    cursor: pointer;
+}
+
+#db-search-button:hover {
+    background: #0b7dda;
+}
+
+.search-result {
+    margin-top: 10px;
+    padding: 10px;
+    background: #222;
+    border-radius: 4px;
+    border-left: 3px solid #2196F3;
+}
+
+.search-result .result-item {
+    margin-bottom: 10px;
+}
+
+.search-result h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: #2196F3;
+}
+
+.search-result ul {
+    list-style-type: none;
+    padding-left: 0;
+    margin-bottom: 10px;
+}
+
+.search-result li {
+    margin-bottom: 5px;
+}
+
+.search-result .not-found {
+    color: #ff9800;
+    font-style: italic;
+}
+
+.braille-preview {
+    margin-top: 10px;
+    display: flex;
+    gap: 5px;
+}
